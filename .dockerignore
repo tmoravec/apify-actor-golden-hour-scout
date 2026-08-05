@@ -1,0 +1,14 @@
+# Reinstalled inside the image
+node_modules
+# Rebuilt by the builder stage
+dist
+# Local Apify state and dev-only files
+storage
+.venv
+coverage
+tests
+tags
+plans
+reviews
+.git
+.gitignore

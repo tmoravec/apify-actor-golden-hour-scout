@@ -1,0 +1,25 @@
+{
+  "name": "golden-hour-scout",
+  "version": "0.1.0",
+  "description": "Apify Actor that returns golden/blue-hour photography windows for a location over the next 7 days, labeled with the forecast's own WMO condition codes.",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node dist/main.js",
+    "start:dev": "tsx src/main.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "license": "Apache-2.0",
+  "dependencies": {
+    "apify": "^3.7.2",
+    "suncalc": "2.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "26.1.2",
+    "tsx": "4.23.1",
+    "typescript": "7.0.2",
+    "vitest": "4.1.10"
+  }
+}

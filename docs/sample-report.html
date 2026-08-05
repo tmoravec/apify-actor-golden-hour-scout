@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Golden Hour Scout — Yosemite Valley, California, United States</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #0c0b10;
+    --bg-panel: #17151d;
+    --bg-panel-2: #1f1c26;
+    --fg: #ece7de;
+    --fg-muted: #a49d92;
+    --accent: #e8a33d;
+    --accent-2: #f2c879;
+    --border: #33303c;
+    --daylight: #3b3524;
+    --night: #100e15;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: radial-gradient(ellipse at top, #1a1620 0%, var(--bg) 60%);
+    color: var(--fg);
+    font-family: Georgia, 'Iowan Old Style', 'Palatino Linotype', serif;
+    line-height: 1.5;
+  }
+
+  /* Gutters shrink with the viewport rather than at a breakpoint: at 1.5rem a
+     side, a 360px phone spends a sixth of its width on whitespace before the
+     panel's own padding is counted. */
+  .wrap {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: clamp(1rem, 3vw, 2rem) clamp(0.85rem, 4vw, 1.5rem) clamp(2rem, 6vw, 3rem);
+  }
+
+  header.report-header {
+    padding: clamp(1.25rem, 5vw, 2.5rem) 0 clamp(1rem, 3vw, 1.5rem);
+    border-bottom: 1px solid var(--border);
+    margin-bottom: clamp(1.25rem, 4vw, 2rem);
+  }
+
+  header.report-header .kicker {
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    font-size: 0.72rem;
+    color: var(--accent-2);
+    margin: 0 0 0.4rem;
+  }
+
+  header.report-header h1 {
+    margin: 0 0 0.35rem;
+    font-size: clamp(1.5rem, 6vw, 2.1rem);
+    font-weight: 600;
+    color: var(--fg);
+    /* Geocoded place names are arbitrary strings and can be a single long
+       token, which would otherwise push the page wider than the viewport. */
+    overflow-wrap: break-word;
+  }
+
+  header.report-header .date-range {
+    color: var(--fg-muted);
+    font-size: 1rem;
+  }
+
+  .day-section {
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: clamp(0.9rem, 3vw, 1.25rem) clamp(0.75rem, 3.5vw, 1.5rem) clamp(1rem, 3.5vw, 1.5rem);
+    margin-bottom: 1.25rem;
+  }
+
+  .day-section h2 {
+    margin: 0 0 0.25rem;
+    font-size: 1.15rem;
+    font-weight: 600;
+    color: var(--accent-2);
+  }
+
+  .day-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin: 0 0 0.6rem;
+    font-size: 0.8rem;
+    color: var(--fg-muted);
+  }
+
+  .daylight-key {
+    width: 1.6rem;
+    height: 0.6rem;
+    border-radius: 2px;
+    background: var(--daylight);
+    border: 1px solid var(--border);
+  }
+
+  .timeline-wrap { margin-bottom: 1rem; }
+
+  /* The strip stretches its x axis to any width (preserveAspectRatio="none"),
+     so only its height needs setting; it loses a little on narrow screens where
+     vertical room is scarcer than horizontal. */
+  .timeline {
+    width: 100%;
+    height: clamp(42px, 11vw, 56px);
+    display: block;
+    background: var(--night);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+  }
+
+  .daylight-band { fill: var(--daylight); }
+  .hour-grid { fill: rgba(236, 231, 222, 0.12); }
+
+  .window-band { stroke: rgba(0, 0, 0, 0.5); stroke-width: 1; }
+  /* A light outline, not a gold one: gold is a band hue now, so an accent-gold
+     highlight would vanish on exactly the golden-hour bands it marks most. */
+  .window-band.ideal-sky { stroke: var(--fg); stroke-width: 2; }
+  /* Clipped at local midnight: the dashed right edge marks the band as
+     continuing past the end of this row rather than ending there. */
+  .runs-past-midnight { stroke-dasharray: 5 4; }
+
+  /* Hour labels are absolutely positioned over a bare row so they can sit at
+     the same percentages as the gridlines in the SVG above. */
+  .hour-axis {
+    position: relative;
+    height: 1.1rem;
+    margin-top: 0.3rem;
+    font-size: 0.7rem;
+    letter-spacing: 0.05em;
+    color: var(--fg-muted);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  .hour-axis .hour-mark { position: absolute; top: 0; transform: translateX(-50%); }
+  .hour-axis .hour-mark.start { transform: none; }
+  .hour-axis .hour-mark.end { transform: translateX(-100%); }
+
+  /* min(190px, 100%) rather than a bare 190px track: on a container narrower
+     than one card the minimum would otherwise win and overflow the panel. */
+  .window-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(190px, 100%), 1fr));
+    gap: 0.75rem;
+  }
+
+  .window-card {
+    background: var(--bg-panel-2);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--band, var(--border));
+    border-radius: 8px;
+    padding: 0.7rem 0.85rem 0.75rem;
+  }
+  .window-card.ideal {
+    border-color: rgba(236, 231, 222, 0.45);
+    border-left-color: var(--band, var(--accent));
+    box-shadow: inset 0 0 0 1px rgba(236, 231, 222, 0.14);
+  }
+  .window-card p { margin: 0; }
+
+  .wc-type {
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--fg-muted);
+  }
+  .wc-time { font-size: 1.05rem; color: var(--fg); font-variant-numeric: tabular-nums; }
+  .wc-next-day { font-size: 0.68rem; color: var(--accent-2); margin-left: 0.35rem; }
+  .window-card .wc-cond { font-size: 0.85rem; color: var(--fg-muted); margin-bottom: 0.6rem; }
+  .wc-ideal { color: var(--accent-2); font-weight: 600; margin-left: 0.4rem; white-space: nowrap; }
+
+  /* The cloud figures, set off from the times above by a rule rather than by a
+     panel: the card is small enough that a nested box would read as a second
+     card. */
+  .wc-cloud { border-top: 1px solid var(--border); padding-top: 0.55rem; }
+  .window-card .wc-cloud-label {
+    font-size: 0.62rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--fg-muted);
+    margin-bottom: 0.2rem;
+  }
+
+  .cloud-key { list-style: none; margin: 0; padding: 0; font-size: 0.78rem; color: var(--fg-muted); }
+  /* Label left, figure right: three rows of right-aligned tabular numerals are
+     comparable down the column and across cards, which is the only comparison
+     these three independent measurements support. */
+  .cloud-key li { display: flex; align-items: baseline; gap: 0.4rem; line-height: 1.45; }
+  .cloud-key b { margin-left: auto; color: var(--fg); font-weight: 600; font-variant-numeric: tabular-nums; }
+  /* Total is a separate whole-sky reading, not the sum of the three above it:
+     the rule keeps it from being read as a column total. */
+  .cloud-key .cloud-total { margin-top: 0.3rem; padding-top: 0.3rem; border-top: 1px solid var(--border); }
+
+  .polar-banner {
+    background: linear-gradient(135deg, var(--bg-panel-2), var(--bg-panel));
+    border: 1px dashed var(--accent);
+    border-radius: 10px;
+    padding: clamp(0.9rem, 3vw, 1.1rem) clamp(0.75rem, 3.5vw, 1.5rem);
+    margin-bottom: 1.25rem;
+    color: var(--fg);
+  }
+  .polar-banner .polar-title { color: var(--accent-2); font-weight: 600; margin: 0 0 0.35rem; }
+  /* Same banner frame, cooler accent: an ordinary day with no completed
+     windows is a different situation from a polar day and should not read as
+     one at a glance. */
+  .no-windows-banner { border-style: dotted; border-color: var(--fg-muted); }
+
+  footer.report-footer {
+    margin-top: clamp(1.5rem, 5vw, 2.5rem);
+    padding-top: clamp(1rem, 3vw, 1.5rem);
+    border-top: 1px solid var(--border);
+    color: var(--fg-muted);
+    font-size: 0.85rem;
+  }
+
+  footer.report-footer h3 { color: var(--fg); font-size: 0.95rem; margin: 1.25rem 0 0.5rem; }
+
+  /* Dataset field names in the footer prose. em-relative so the mono face
+     tracks the surrounding text instead of jumping a size, as browser defaults
+     for a code element otherwise do. */
+  footer.report-footer code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.95em;
+    color: var(--fg);
+  }
+
+  /* Last-resort escape hatch for the footer tables: they shrink first (see the
+     narrow block below), and only scroll within their own box if a very small
+     viewport or a large default font still leaves them wider than the column.
+     The page body never scrolls sideways. */
+  .table-scroll { overflow-x: auto; margin-bottom: 1rem; }
+
+  table.wmo-table { border-collapse: collapse; width: 100%; font-size: 0.8rem; }
+  table.wmo-table th, table.wmo-table td {
+    text-align: left;
+    padding: 0.3rem 0.6rem;
+    border-bottom: 1px solid var(--border);
+  }
+  table.band-key td:not(:first-child), table.band-key th:not(:first-child) { width: 6.5rem; }
+  .band-swatch {
+    display: block;
+    width: 3rem;
+    height: 0.9rem;
+    border-radius: 2px;
+    border: 1px solid rgba(0, 0, 0, 0.5);
+  }
+
+  .attribution a { color: var(--accent-2); }
+
+  @media (max-width: 34rem) {
+    /* Every third hour is too dense to label in a ~20rem column, so the axis
+       falls back to a 6-hourly scale. The gridlines behind it stay 3-hourly:
+       the unlabeled ticks still read as midpoints, and the SVG is shared by
+       every width. */
+    .hour-axis .hour-mark.secondary { display: none; }
+
+    /* The band key's two swatch columns are fixed-width, so on a narrow screen
+       they would crowd out the sky-tier labels that name the rows. */
+    table.band-key td:not(:first-child), table.band-key th:not(:first-child) { width: 3.4rem; }
+    .band-swatch { width: 2.2rem; }
+    table.wmo-table th, table.wmo-table td { padding: 0.3rem 0.4rem; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="report-header"><p class="kicker">Golden Hour Scout</p><h1>Yosemite Valley, California, United States</h1><p class="date-range">2026-08-05 – 2026-08-11</p></header>
+<main>
+<section class="day-section"><h2>2026-08-05</h2><p class="day-meta"><span class="daylight-key"></span>Daylight 06:05–20:02</p><div class="timeline-wrap"><svg class="timeline" viewBox="0 0 1440 56" preserveAspectRatio="none" role="img" aria-label="Daylight and photography-window timeline"><rect class="daylight-band" x="365" y="0" width="837" height="56" /><rect class="hour-grid" x="180" y="0" width="2" height="56" /><rect class="hour-grid" x="360" y="0" width="2" height="56" /><rect class="hour-grid" x="540" y="0" width="2" height="56" /><rect class="hour-grid" x="720" y="0" width="2" height="56" /><rect class="hour-grid" x="900" y="0" width="2" height="56" /><rect class="hour-grid" x="1080" y="0" width="2" height="56" /><rect class="hour-grid" x="1260" y="0" width="2" height="56" /><rect class="window-band" data-window-type="blueHourMorning" x="325" y="8" width="23" height="40" vector-effect="non-scaling-stroke" fill="#5d78c4"><title>blueHourMorning: 05:25–05:48 · Clear</title></rect><rect class="window-band" data-window-type="goldenHourMorning" x="348" y="8" width="75" height="40" vector-effect="non-scaling-stroke" fill="#e8a33d"><title>goldenHourMorning: 05:48–07:03 · Clear</title></rect><rect class="window-band" data-window-type="goldenHourEvening" x="1145" y="8" width="75" height="40" vector-effect="non-scaling-stroke" fill="#e8a33d"><title>goldenHourEvening: 19:05–20:20 · Clear</title></rect><rect class="window-band" data-window-type="blueHourEvening" x="1220" y="8" width="22" height="40" vector-effect="non-scaling-stroke" fill="#5d78c4"><title>blueHourEvening: 20:20–20:42 · Clear</title></rect></svg><div class="hour-axis" aria-hidden="true"><span class="hour-mark start" style="left:0%">00</span><span class="hour-mark secondary" style="left:12.5%">03</span><span class="hour-mark" style="left:25%">06</span><span class="hour-mark secondary" style="left:37.5%">09</span><span class="hour-mark" style="left:50%">12</span><span class="hour-mark secondary" style="left:62.5%">15</span><span class="hour-mark" style="left:75%">18</span><span class="hour-mark secondary" style="left:87.5%">21</span><span class="hour-mark end" style="left:100%">24</span></div></div><div class="window-grid"><article class="window-card" style="--band:#5d78c4"><p class="wc-type">Blue hour · morning</p><p class="wc-time">05:25–05:48</p><p class="wc-cond">Clear</p><div class="wc-cloud"><p class="wc-cloud-label">Cloud cover</p><ul class="cloud-key"><li>high<b>0%</b></li><li>mid<b>0%</b></li><li>low<b>0%</b></li><li class="cloud-total">total<b>0%</b></li></ul></div></article><article class="window-card" style="--band:#e8a33d"><p class="wc-type">Golden hour · morning</p><p class="wc-time">05:48–07:03</p><p class="wc-cond">Clear</p><div class="wc-cloud"><p class="wc-cloud-label">Cloud cover</p><ul class="cloud-key"><li>high<b>0%</b></li><li>mid<b>0%</b></li><li>low<b>0%</b></li><li class="cloud-total">total<b>0%</b></li></ul></div></article><article class="window-card" style="--band:#e8a33d"><p class="wc-type">Golden hour · evening</p><p class="wc-time">19:05–20:20</p><p class="wc-cond">Clear</p><div class="wc-cloud"><p class="wc-cloud-label">Cloud cover</p><ul class="cloud-key"><li>high<b>0%</b></li><li>mid<b>0%</b></li><li>low<b>0%</b></li><li class="cloud-total">total<b>0%</b></li></ul></div></article><article class="window-card" style="--band:#5d78c4"><p class="wc-type">Blue hour · evening</p><p class="wc-time">20:20–20:42</p><p class="wc-cond">Clear</p><div class="wc-cloud"><p class="wc-cloud-label">Cloud cover</p><ul class="cloud-key"><li>high<b>0%</b></li><li>mid<b>0%</b></li><li>low<b>0%</b></li><li class="cloud-total">total<b>0%</b></li></ul></div></article></div></section>
+<section class="day-section"><h2>2026-08-06</h2><p class="day-meta"><span class="daylight-key"></span>Daylight 06:06–20:01</p><div class="timeline-wrap"><svg class="timeline" viewBox="0 0 1440 56" preserveAspectRatio="none" role="img" aria-label="Daylight and photography-window timeline"><rect class="daylight-band" x="366" y="0" width="835" height="56" /><rect class="hour-grid" x="180" y="0" width="2" height="56" /><rect class="hour-grid" x="360" y="0" width="2" height="56" /><rect class="hour-grid" x="540" y="0" width="2" height="56" /><rect class="hour-grid" x="720" y="0" width="2" height="56" /><rect class="hour-grid" x="900" y="0" width="2" height="56" /><rect class="hour-grid" x="1080" y="0" width="2" height="56" /><rect class="hour-grid" x="1260" y="0" width="2" height="56" /><rect class="window-band" data-window-type="blueHourMorning" x="326" y="8" width="22" height="40" vector-effect="non-scaling-stroke" fill="#5d78c4"><title>blueHourMorning: 05:26–05:48 · Clear</title></rect><rect class="window-band" data-window-type="goldenHourMorning" x="348" y="8" width="75" height="40" vector-effect="non-scaling-stroke" fill="#e8a33d"><title>goldenHourMorning: 05:48–07:03 · Clear</title></rect><rect class="window-band" data-window-type="goldenHourEvening" x="1144" y="8" width="74" height="40" vector-effect="non-scaling-stroke" fill="#91714a"><title>goldenHourEvening: 19:04–20:18 · Overcast</title></rect><rect class="window-band" data-window-type="blueHourEvening" x="1218" y="8" width="23" height="40" vector-effect="non-scaling-stroke" fill="#535e86"><title>blueHourEvening: 20:18–20:41 · Overcast</title></rect></svg><div class="hour-axis" aria-hidden="true"><span class="hour-mark start" style="left:0%">00</span><span class="hour-mark secondary" style="left:12.5%">03</span><span class="hour-mark" style="left:25%">06</span><span class="hour-mark secondary" style="left:37.5%">09</span><span class="hour-mark" style="left:50%">12</span><span class="hour-mark secondary" style="left:62.5%">15</span><span class="hour-mark" style="left:75%">18</span><span class="hour-mark secondary" style="left:87.5%">21</span><span class="hour-mark end" style="left:100%">24</span></div></div><div class="window-grid"><article class="window-card" style="--band:#5d78c4"><p class="wc-type">Blue hour · morning</p><p class="wc-time">05:26–05:48</p><p class="wc-cond">Clear</p><div class="wc-cloud"><p class="wc-cloud-label">Cloud cover</p><ul class="cloud-key"><li>high<b>0%</b></li><li>mid<b>0%</b></li><li>low<b>0%</b></li><li class="cloud-total">total<b>0%</b></li></ul></div></article><article class="window-card" style="--band:#e8a33d"><p class="wc-type">Golden hour · morning</p><p class="wc-time">05:48–07:03</p><p class="wc-cond">Clear</p><div class="wc-cloud"><p class="wc-cloud-label">Cloud cover</p><ul class="cloud-key"><li>high<b>0%</b></li><li>mid<b>0%</b></li><li>low<b>0%</b></li><li class="cloud-total">total<b>0%</b></li></ul></div></article><article class="window-card" style="--band:#91714a"><p class="wc-type">Golden hour · evening</p><p class="wc-time">19:04–20:18</p><p class="wc-cond">Overcast</p><div class="wc-cloud"><p class="wc-cloud-label">Cloud cover</p><ul class="cloud-key"><li>high<b>100%</b></li><li>mid<b>1%</b></li><li>low<b>0%</b></li><li class="cloud-total">total<b>100%</b></li></ul></div></article><article class="window-card" style="--band:#535e86"><p class="wc-type">Blue hour · evening</p><p class="wc-time">20:18–20:41</p><p class="wc-cond">Overcast</p><div class="wc-cloud"><p class="wc-cloud-label">Cloud cover</p><ul class="cloud-key"><li>high<b>90%</b></li><li>mid<b>3%</b></li><li>low<b>0%</b></li><li class="cloud-total">total<b>90%</b></li></ul></div></article></div></section>
+<section class="day-section"><h2>2026-08-07</h2><p class="day-meta"><span class="daylight-key"></span>Daylight 06:07–20:00</p><div class="timeline-wrap"><svg class="timeline" viewBox="0 0 1440 56" preserveAspectRatio="none" role="img" aria-label="Daylight and photography-window timeline"><rect class="daylight-band" x="367" y="0" width="833" height="56" /><rect class="hour-grid" x="180" y="0" width="2" height="56" /><rect class="hour-grid" x="360" y="0" width="2" height="56" /><rect class="hour-grid" x="540" y="0" width="2" height="56" /><rect class="hour-grid" x="720" y="0" width="2" height="56" /><rect class="hour-grid" x="900" y="0" width="2" height="56" /><rect class="hour-grid" x="1080" y="0" width="2" height="56" /><rect class="hour-grid" x="1260" y="0" width="2" height="56" /><rect class="window-band" data-window-type="blueHourMorning" x="327" y="8" width="22" height="40" vector-effect="non-scaling-stroke" fill="#5d78c4"><title>blueHourMorning: 05:27–05:49 · Clear</title></rect><rect class="window-band" data-window-type="goldenHourMorning" x="349" y="8" width="75" height="40" vector-effect="non-scaling-stroke" fill="#e8a33d"><title>goldenHourMorning: 05:49–07:04 · Clear</title></rect><rect class="window-band" data-window-type="goldenHourEvening" x="1143" y="8" width="74" height="40" vector-effect="non-scaling-stroke" fill="#e8a33d"><title>goldenHourEvening: 19:03–20:17 · Clear</title></rect><rect class="window-band" data-window-type="blueHourEvening" x="1217" y="8" width="23" height="40" vector-effect="non-scaling-stroke" fill="#5d78c4"><title>blueHourEvening: 20:17–20:40 · Clear</title></rect></svg><div class="hour-axis" aria-hidden="true"><span class="hour-mark start" style="left:0%">00</span><span class="hour-mark secondary" style="left:12.5%">03</span><span class="hour-mark" style="left:25%">06</span><span class="hour-mark secondary" style="left:37.5%">09</span><span class="hour-mark" style="left:50%">12</span><span class="hour-mark secondary" style="left:62.5%">15</span><span class="hour-mark" style="left:75%">18</span><span class="hour-mark secondary" style="left:87.5%">21</span><span class="hour-mark end" style="left:100%">24</span></div></div><div class="window-grid"><article class="window-card" style="--band:#5d78c4"><p class="wc-type">Blue hour · morning</p><p class="wc-time">05:27–05:49</p><p class="wc-cond">Clear</p><div class="wc-cloud"><p class="wc-cloud-label">Cloud cover</p><ul class="cloud-key"><li>high<b>0%</b></li><li>mid<b>0%</b></li><li>low<b>0%</b></li><li class="cloud-total">total<b>0%</b></li></ul></div></article><article class="window-card" style="--band:#e8a33d"><p class="wc-type">Golden hour · morning</p><p class="wc-time">05:49–07:04</p><p class="wc-cond">Clear</p><div class="wc-cloud"><p class="wc-cloud-label">Cloud cover</p><ul class="cloud-key"><li>high<b>0%</b></li><li>mid<b>0%</b></li><li>low<b>0%</b></li><li class="cloud-total">total<b>0%</b></li></ul></div></article><article class="window-card" style="--band:#e8a33d"><p class="wc-type">Golden hour · evening</p><p class="wc-time">19:03–20:17</p><p class="wc-cond">Clear</p><div class="wc-cloud"><p class="wc-cloud-label">Cloud cover</p><ul class="cloud-key"><li>high<b>5%</b></li><li>mid<b>10%</b></li><li>low<b>0%</b></li><li class="cloud-total">total<b>18%</b></li></ul></div></article><article class="window-card" style="--band:#5d78c4"><p class="wc-type">Blue hour · evening</p><p class="wc-time">20:17–20:40</p><p class="wc-cond">Clear</p><div class="wc-cloud"><p class="wc-cloud-label">Cloud cover</p><ul class="cloud-key"><li>high<b>5%</b></li><li>mid<b>10%</b></li><li>low<b>0%</b></li><li class="cloud-total">total<b>18%</b></li></ul></div></article></div></section>
+<section class="day-section"><h2>2026-08-08</h2><p class="day-meta"><span class="daylight-key"></span>Daylight 06:08–19:59</p><div class="timeline-wrap"><svg class="timeline" viewBox="0 0 1440 56" preserveAspectRatio="none" role="img" aria-label="Daylight and photography-window timeline"><rect class="daylight-band" x="368" y="0" width="831" height="56" /><rect class="hour-grid" x="180" y="0" width="2" height="56" /><rect class="hour-grid" x="360" y="0" width="2" height="56" /><rect class="hour-grid" x="540" y="0" width="2" height="56" /><rect class="hour-grid" x="720" y="0" width="2" height="56" /><rect class="hour-grid" x="900" y="0" width="2" height="56" /><rect class="hour-grid" x="1080" y="0" width="2" height="56" /><rect class="hour-grid" x="1260" y="0" width="2" height="56" /><rect class="window-band ideal-sky" data-window-type="blueHourMorning" x="328" y="8" width="22" height="40" vector-effect="non-scaling-stroke" fill="#5d78c4"><title>blueHourMorning: 05:28–05:50 · Mainly clear</title></rect><rect class="window-band ideal-sky" data-window-type="goldenHourMorning" x="350" y="8" width="75" height="40" vector-effect="non-scaling-stroke" fill="#e8a33d"><title>goldenHourMorning: 05:50–07:05 · Mainly clear</title></rect><rect class="window-band" data-window-type="goldenHourEvening" x="1142" y="8" width="74" height="40" vector-effect="non-scaling-stroke" fill="#e8a33d"><title>goldenHourEvening: 19:02–20:16 · Clear</title></rect><rect class="window-band" data-window-type="blueHourEvening" x="1216" y="8" width="22" height="40" vector-effect="non-scaling-stroke" fill="#5d78c4"><title>blueHourEvening: 20:16–20:38 · Clear</title></rect></svg><div class="hour-axis" aria-hidden="true"><span class="hour-mark start" style="left:0%">00</span><span class="hour-mark secondary" style="left:12.5%">03</span><span class="hour-mark" style="left:25%">06</span><span class="hour-mark secondary" style="left:37.5%">09</span><span class="hour-mark" style="left:50%">12</span><span class="hour-mark secondary" style="left:62.5%">15</span><span class="hour-mark" style="left:75%">18</span><span class="hour-mark secondary" style="left:87.5%">21</span><span class="hour-mark end" style="left:100%">24</span></div></div><div class="window-grid"><article class="window-card ideal" style="--band:#5d78c4"><p class="wc-type">Blue hour · morning</p><p class="wc-time">05:28–05:50</p><p class="wc-cond">Mainly clear<span class="wc-ideal">★ ideal sky</span></p><div class="wc-cloud"><p class="wc-cloud-label">Cloud cover</p><ul class="cloud-key"><li>high<b>35%</b></li><li>mid<b>5%</b></li><li>low<b>0%</b></li><li class="cloud-total">total<b>40%</b></li></ul></div></article><article class="window-card ideal" style="--band:#e8a33d"><p class="wc-type">Golden hour · morning</p><p class="wc-time">05:50–07:05</p><p class="wc-cond">Mainly clear<span class="wc-ideal">★ ideal sky</span></p><div class="wc-cloud"><p class="wc-cloud-label">Cloud cover</p><ul class="cloud-key"><li>high<b>35%</b></li><li>mid<b>5%</b></li><li>low<b>0%</b></li><li class="cloud-total">total<b>40%</b></li></ul></div></article><article class="window-card" style="--band:#e8a33d"><p class="wc-type">Golden hour · evening</p><p class="wc-time">19:02–20:16</p><p class="wc-cond">Clear</p><div class="wc-cloud"><p class="wc-cloud-label">Cloud cover</p><ul class="cloud-key"><li>high<b>0%</b></li><li>mid<b>0%</b></li><li>low<b>0%</b></li><li class="cloud-total">total<b>0%</b></li></ul></div></article><article class="window-card" style="--band:#5d78c4"><p class="wc-type">Blue hour · evening</p><p class="wc-time">20:16–20:38</p><p class="wc-cond">Clear</p><div class="wc-cloud"><p class="wc-cloud-label">Cloud cover</p><ul class="cloud-key"><li>high<b>0%</b></li><li>mid<b>0%</b></li><li>low<b>0%</b></li><li class="cloud-total">total<b>0%</b></li></ul></div></article></div></section>
+<section class="day-section"><h2>2026-08-09</h2><p class="day-meta"><span class="daylight-key"></span>Daylight 06:08–19:58</p><div class="timeline-wrap"><svg class="timeline" viewBox="0 0 1440 56" preserveAspectRatio="none" role="img" aria-label="Daylight and photography-window timeline"><rect class="daylight-band" x="368" y="0" width="830" height="56" /><rect class="hour-grid" x="180" y="0" width="2" height="56" /><rect class="hour-grid" x="360" y="0" width="2" height="56" /><rect class="hour-grid" x="540" y="0" width="2" height="56" /><rect class="hour-grid" x="720" y="0" width="2" height="56" /><rect class="hour-grid" x="900" y="0" width="2" height="56" /><rect class="hour-grid" x="1080" y="0" width="2" height="56" /><rect class="hour-grid" x="1260" y="0" width="2" height="56" /><rect class="window-band" data-window-type="blueHourMorning" x="329" y="8" width="22" height="40" vector-effect="non-scaling-stroke" fill="#5d78c4"><title>blueHourMorning: 05:29–05:51 · Clear</title></rect><rect class="window-band" data-window-type="goldenHourMorning" x="351" y="8" width="75" height="40" vector-effect="non-scaling-stroke" fill="#e8a33d"><title>goldenHourMorning: 05:51–07:06 · Clear</title></rect><rect class="window-band" data-window-type="goldenHourEvening" x="1141" y="8" width="74" height="40" vector-effect="non-scaling-stroke" fill="#e8a33d"><title>goldenHourEvening: 19:01–20:15 · Clear</title></rect><rect class="window-band" data-window-type="blueHourEvening" x="1215" y="8" width="22" height="40" vector-effect="non-scaling-stroke" fill="#5d78c4"><title>blueHourEvening: 20:15–20:37 · Clear</title></rect></svg><div class="hour-axis" aria-hidden="true"><span class="hour-mark start" style="left:0%">00</span><span class="hour-mark secondary" style="left:12.5%">03</span><span class="hour-mark" style="left:25%">06</span><span class="hour-mark secondary" style="left:37.5%">09</span><span class="hour-mark" style="left:50%">12</span><span class="hour-mark secondary" style="left:62.5%">15</span><span class="hour-mark" style="left:75%">18</span><span class="hour-mark secondary" style="left:87.5%">21</span><span class="hour-mark end" style="left:100%">24</span></div></div><div class="window-grid"><article class="window-card" style="--band:#5d78c4"><p class="wc-type">Blue hour · morning</p><p class="wc-time">05:29–05:51</p><p class="wc-cond">Clear</p><div class="wc-cloud"><p class="wc-cloud-label">Cloud cover</p><ul class="cloud-key"><li>high<b>0%</b></li><li>mid<b>0%</b></li><li>low<b>0%</b></li><li class="cloud-total">total<b>0%</b></li></ul></div></article><article class="window-card" style="--band:#e8a33d"><p class="wc-type">Golden hour · morning</p><p class="wc-time">05:51–07:06</p><p class="wc-cond">Clear</p><div class="wc-cloud"><p class="wc-cloud-label">Cloud cover</p><ul class="cloud-key"><li>high<b>0%</b></li><li>mid<b>0%</b></li><li>low<b>0%</b></li><li class="cloud-total">total<b>0%</b></li></ul></div></article><article class="window-card" style="--band:#e8a33d"><p class="wc-type">Golden hour · evening</p><p class="wc-time">19:01–20:15</p><p class="wc-cond">Clear</p><div class="wc-cloud"><p class="wc-cloud-label">Cloud cover</p><ul class="cloud-key"><li>high<b>0%</b></li><li>mid<b>0%</b></li><li>low<b>0%</b></li><li class="cloud-total">total<b>0%</b></li></ul></div></article><article class="window-card" style="--band:#5d78c4"><p class="wc-type">Blue hour · evening</p><p class="wc-time">20:15–20:37</p><p class="wc-cond">Clear</p><div class="wc-cloud"><p class="wc-cloud-label">Cloud cover</p><ul class="cloud-key"><li>high<b>0%</b></li><li>mid<b>0%</b></li><li>low<b>0%</b></li><li class="cloud-total">total<b>0%</b></li></ul></div></article></div></section>
+<section class="day-section"><h2>2026-08-10</h2><p class="day-meta"><span class="daylight-key"></span>Daylight 06:09–19:56</p><div class="timeline-wrap"><svg class="timeline" viewBox="0 0 1440 56" preserveAspectRatio="none" role="img" aria-label="Daylight and photography-window timeline"><rect class="daylight-band" x="369" y="0" width="827" height="56" /><rect class="hour-grid" x="180" y="0" width="2" height="56" /><rect class="hour-grid" x="360" y="0" width="2" height="56" /><rect class="hour-grid" x="540" y="0" width="2" height="56" /><rect class="hour-grid" x="720" y="0" width="2" height="56" /><rect class="hour-grid" x="900" y="0" width="2" height="56" /><rect class="hour-grid" x="1080" y="0" width="2" height="56" /><rect class="hour-grid" x="1260" y="0" width="2" height="56" /><rect class="window-band" data-window-type="blueHourMorning" x="330" y="8" width="22" height="40" vector-effect="non-scaling-stroke" fill="#5d78c4"><title>blueHourMorning: 05:30–05:52 · Clear</title></rect><rect class="window-band" data-window-type="goldenHourMorning" x="352" y="8" width="74" height="40" vector-effect="non-scaling-stroke" fill="#e8a33d"><title>goldenHourMorning: 05:52–07:06 · Clear</title></rect><rect class="window-band" data-window-type="goldenHourEvening" x="1139" y="8" width="75" height="40" vector-effect="non-scaling-stroke" fill="#e8a33d"><title>goldenHourEvening: 18:59–20:14 · Clear</title></rect><rect class="window-band" data-window-type="blueHourEvening" x="1214" y="8" width="22" height="40" vector-effect="non-scaling-stroke" fill="#5d78c4"><title>blueHourEvening: 20:14–20:36 · Clear</title></rect></svg><div class="hour-axis" aria-hidden="true"><span class="hour-mark start" style="left:0%">00</span><span class="hour-mark secondary" style="left:12.5%">03</span><span class="hour-mark" style="left:25%">06</span><span class="hour-mark secondary" style="left:37.5%">09</span><span class="hour-mark" style="left:50%">12</span><span class="hour-mark secondary" style="left:62.5%">15</span><span class="hour-mark" style="left:75%">18</span><span class="hour-mark secondary" style="left:87.5%">21</span><span class="hour-mark end" style="left:100%">24</span></div></div><div class="window-grid"><article class="window-card" style="--band:#5d78c4"><p class="wc-type">Blue hour · morning</p><p class="wc-time">05:30–05:52</p><p class="wc-cond">Clear</p><div class="wc-cloud"><p class="wc-cloud-label">Cloud cover</p><ul class="cloud-key"><li>high<b>0%</b></li><li>mid<b>0%</b></li><li>low<b>0%</b></li><li class="cloud-total">total<b>0%</b></li></ul></div></article><article class="window-card" style="--band:#e8a33d"><p class="wc-type">Golden hour · morning</p><p class="wc-time">05:52–07:06</p><p class="wc-cond">Clear</p><div class="wc-cloud"><p class="wc-cloud-label">Cloud cover</p><ul class="cloud-key"><li>high<b>0%</b></li><li>mid<b>0%</b></li><li>low<b>0%</b></li><li class="cloud-total">total<b>0%</b></li></ul></div></article><article class="window-card" style="--band:#e8a33d"><p class="wc-type">Golden hour · evening</p><p class="wc-time">18:59–20:14</p><p class="wc-cond">Clear</p><div class="wc-cloud"><p class="wc-cloud-label">Cloud cover</p><ul class="cloud-key"><li>high<b>9%</b></li><li>mid<b>0%</b></li><li>low<b>0%</b></li><li class="cloud-total">total<b>11%</b></li></ul></div></article><article class="window-card" style="--band:#5d78c4"><p class="wc-type">Blue hour · evening</p><p class="wc-time">20:14–20:36</p><p class="wc-cond">Clear</p><div class="wc-cloud"><p class="wc-cloud-label">Cloud cover</p><ul class="cloud-key"><li>high<b>9%</b></li><li>mid<b>0%</b></li><li>low<b>0%</b></li><li class="cloud-total">total<b>11%</b></li></ul></div></article></div></section>
+<section class="day-section"><h2>2026-08-11</h2><p class="day-meta"><span class="daylight-key"></span>Daylight 06:10–19:55</p><div class="timeline-wrap"><svg class="timeline" viewBox="0 0 1440 56" preserveAspectRatio="none" role="img" aria-label="Daylight and photography-window timeline"><rect class="daylight-band" x="370" y="0" width="825" height="56" /><rect class="hour-grid" x="180" y="0" width="2" height="56" /><rect class="hour-grid" x="360" y="0" width="2" height="56" /><rect class="hour-grid" x="540" y="0" width="2" height="56" /><rect class="hour-grid" x="720" y="0" width="2" height="56" /><rect class="hour-grid" x="900" y="0" width="2" height="56" /><rect class="hour-grid" x="1080" y="0" width="2" height="56" /><rect class="hour-grid" x="1260" y="0" width="2" height="56" /><rect class="window-band" data-window-type="blueHourMorning" x="331" y="8" width="22" height="40" vector-effect="non-scaling-stroke" fill="#5d78c4"><title>blueHourMorning: 05:31–05:53 · Clear</title></rect><rect class="window-band" data-window-type="goldenHourMorning" x="353" y="8" width="74" height="40" vector-effect="non-scaling-stroke" fill="#e8a33d"><title>goldenHourMorning: 05:53–07:07 · Clear</title></rect><rect class="window-band" data-window-type="goldenHourEvening" x="1138" y="8" width="74" height="40" vector-effect="non-scaling-stroke" fill="#91714a"><title>goldenHourEvening: 18:58–20:12 · Overcast</title></rect><rect class="window-band" data-window-type="blueHourEvening" x="1212" y="8" width="23" height="40" vector-effect="non-scaling-stroke" fill="#535e86"><title>blueHourEvening: 20:12–20:35 · Overcast</title></rect></svg><div class="hour-axis" aria-hidden="true"><span class="hour-mark start" style="left:0%">00</span><span class="hour-mark secondary" style="left:12.5%">03</span><span class="hour-mark" style="left:25%">06</span><span class="hour-mark secondary" style="left:37.5%">09</span><span class="hour-mark" style="left:50%">12</span><span class="hour-mark secondary" style="left:62.5%">15</span><span class="hour-mark" style="left:75%">18</span><span class="hour-mark secondary" style="left:87.5%">21</span><span class="hour-mark end" style="left:100%">24</span></div></div><div class="window-grid"><article class="window-card" style="--band:#5d78c4"><p class="wc-type">Blue hour · morning</p><p class="wc-time">05:31–05:53</p><p class="wc-cond">Clear</p><div class="wc-cloud"><p class="wc-cloud-label">Cloud cover</p><ul class="cloud-key"><li>high<b>5%</b></li><li>mid<b>3%</b></li><li>low<b>0%</b></li><li class="cloud-total">total<b>7%</b></li></ul></div></article><article class="window-card" style="--band:#e8a33d"><p class="wc-type">Golden hour · morning</p><p class="wc-time">05:53–07:07</p><p class="wc-cond">Clear</p><div class="wc-cloud"><p class="wc-cloud-label">Cloud cover</p><ul class="cloud-key"><li>high<b>4%</b></li><li>mid<b>6%</b></li><li>low<b>0%</b></li><li class="cloud-total">total<b>8%</b></li></ul></div></article><article class="window-card" style="--band:#91714a"><p class="wc-type">Golden hour · evening</p><p class="wc-time">18:58–20:12</p><p class="wc-cond">Overcast</p><div class="wc-cloud"><p class="wc-cloud-label">Cloud cover</p><ul class="cloud-key"><li>high<b>100%</b></li><li>mid<b>2%</b></li><li>low<b>0%</b></li><li class="cloud-total">total<b>100%</b></li></ul></div></article><article class="window-card" style="--band:#535e86"><p class="wc-type">Blue hour · evening</p><p class="wc-time">20:12–20:35</p><p class="wc-cond">Overcast</p><div class="wc-cloud"><p class="wc-cloud-label">Cloud cover</p><ul class="cloud-key"><li>high<b>100%</b></li><li>mid<b>2%</b></li><li>low<b>0%</b></li><li class="cloud-total">total<b>100%</b></li></ul></div></article></div></section>
+</main>
+<footer class="report-footer"><h3>Reading a day</h3><p>Each day's strip is one local midnight-to-midnight span, labeled in hours along the bottom. The shaded region is daylight (sunrise to sunset); the four solid bands are the photography windows. Every band is described in full by the card beneath it, whose left edge repeats the band's color.</p><h3>Band colors</h3><p>A band says two things at once. Its <strong>hue is the window</strong> &mdash; gold for the golden hours around sunrise and sunset, blue for the blue hours just outside them &mdash; and nothing else is ever drawn in those two colors. Its <strong>lightness is the sky</strong>: the band is washed toward grey as the sky closes in, so a vivid band is open sky and a flat, grey one is overcast or wet. A week of strips can therefore be scanned for good light without reading a single card.</p><p>The wash is a four-step summary; the exact condition is always printed on the window's card. Nothing here rates a window beyond what the sky is doing &mdash; the ★ ideal-sky outline is the only judgement the report makes.</p><div class="table-scroll"><table class="wmo-table band-key"><thead><tr><th>Sky</th><th>Golden hour</th><th>Blue hour</th></tr></thead><tbody><tr><td>Clear or mainly clear</td><td><span class="band-swatch" style="background:#e8a33d"></span></td><td><span class="band-swatch" style="background:#5d78c4"></span></td></tr><tr><td>Partly cloudy</td><td><span class="band-swatch" style="background:#b98844"></span></td><td><span class="band-swatch" style="background:#576aa2"></span></td></tr><tr><td>Overcast or fog</td><td><span class="band-swatch" style="background:#91714a"></span></td><td><span class="band-swatch" style="background:#535e86"></span></td></tr><tr><td>Drizzle, rain, snow, or thunderstorm</td><td><span class="band-swatch" style="background:#725f4e"></span></td><td><span class="band-swatch" style="background:#4f5470"></span></td></tr><tr><td>Not reported</td><td colspan="2"><span class="band-swatch" style="background:#3a3841"></span></td></tr></tbody></table></div><h3>Cloud cover</h3><p>Each card lists the high, mid, and low cloud cover reported for the window's midpoint hour, with the total ruled off beneath them. All four are <strong>independent measurements</strong>, each on its own 0&ndash;100% scale. The three layers are not shares of one total and routinely sum past 100% &mdash; 60% high cloud over 60% low cloud is an ordinary reading, not a contradiction &mdash; and the total is its own whole-sky figure, not their sum: layers overlap, so 45% total sits comfortably under 45% high plus 20% mid. Low cloud is the one that blocks the sun at the horizon; mid and high cloud are what catch color once it is there. Any figure shows <em>n/a</em> when the forecast did not report it, which is not the same as 0%.</p><h3>WMO sky condition codes</h3><p>This table is here for the <strong>raw data output</strong>, not for the report: the cards above always print the label, while each window in the dataset also carries the numeric code it came from (<code>wmoCode</code>). Look a code up here to read the dataset without this page beside it.</p><div class="table-scroll"><table class="wmo-table"><thead><tr><th>WMO code(s)</th><th>Label</th></tr></thead><tbody><tr><td>0</td><td>Clear</td></tr><tr><td>1</td><td>Mainly clear</td></tr><tr><td>2</td><td>Partly cloudy</td></tr><tr><td>3</td><td>Overcast</td></tr><tr><td>40, 41, 43, 44, 45, 48, 49</td><td>Fog</td></tr><tr><td>51, 53, 55, 56, 57</td><td>Drizzle</td></tr><tr><td>61, 63, 65, 66, 67, 80, 81, 82</td><td>Rain</td></tr><tr><td>71, 73, 75, 77, 85, 86</td><td>Snow</td></tr><tr><td>95, 96, 99</td><td>Thunderstorm</td></tr></tbody></table></div><h3>Ideal-sky rule</h3><p>A window is highlighted as <strong>ideal sky</strong> when the forecast reports no rain, snow or fog at its midpoint hour <em>and</em> all four cloud figures sit inside these bands <em>at the same time</em> &mdash; every band inclusive at both ends:</p><div class="table-scroll"><table class="wmo-table"><thead><tr><th>Cloud</th><th>Ideal band</th></tr></thead><tbody><tr><td>High (cirrus, ~6 km+)</td><td>30&ndash;60%</td></tr><tr><td>Mid (altocumulus, 2–6 km)</td><td>0&ndash;40%</td></tr><tr><td>Low (stratus, under 2 km)</td><td>0&ndash;10%</td></tr><tr><td>Total (whole sky)</td><td>30&ndash;70%</td></tr></tbody></table></div><p>High cloud is the money-maker &mdash; thin and icy, it catches light from below once the sun drops toward the horizon and turns pink, orange and red; too little and there is nothing to light up, too much and the light source itself is screened off. Mid cloud adds texture in moderation but greys everything out when solid. Low cloud is the enemy: it sits on the horizon line and blocks the low-angle light that defines golden hour. Total cover is a <strong>separate whole-sky reading</strong>, not the sum of the other three, and it rules out both the empty sky with nothing to catch color and the closed-in one. Because all four are required, a window missing any of them from the forecast is never marked ideal.</p><p>One caveat the data can't cover: the forecast gives one whole-sky figure per layer with no bearing, so a near-zero low reading is the best available stand-in for what actually matters, which is clear horizon <em>in the direction of the sun</em>. This is a presentation highlight on top of the reported condition and raw numbers, not a replacement for them.</p><p class="attribution"><a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">Weather data by Open-Meteo.com</a></p></footer>
+</div>
+</body>
+</html>

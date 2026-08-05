@@ -1,0 +1,13 @@
+{
+  "results": [
+    {
+      "id": 2352778,
+      "name": "Monaco",
+      "latitude": 43.73333,
+      "longitude": 7.41667,
+      "timezone": "Europe/Monaco",
+      "country": "Monaco"
+    }
+  ],
+  "generationtime_ms": 0.4
+}

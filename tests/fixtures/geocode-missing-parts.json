@@ -1,0 +1,12 @@
+{
+  "results": [
+    {
+      "id": 1234567,
+      "name": "Null Island",
+      "latitude": 0.0,
+      "longitude": 0.0,
+      "timezone": "Etc/UTC"
+    }
+  ],
+  "generationtime_ms": 0.4
+}

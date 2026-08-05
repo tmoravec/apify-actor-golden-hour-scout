@@ -1,0 +1,14 @@
+{
+  "results": [
+    {
+      "id": 7262586,
+      "name": "Yosemite Valley",
+      "latitude": 37.74075,
+      "longitude": -119.57788,
+      "timezone": "America/Los_Angeles",
+      "country": "United States",
+      "admin1": "California"
+    }
+  ],
+  "generationtime_ms": 0.64218044
+}
