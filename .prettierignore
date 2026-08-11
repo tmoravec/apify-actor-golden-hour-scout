@@ -1,0 +1,6 @@
+.prettierignore
+package-lock.json
+docs/sample-report.html
+test/fixtures
+plans
+reviews

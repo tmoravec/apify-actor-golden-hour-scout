@@ -1,21 +1,45 @@
 {
-  "title": "Golden Hour Scout",
-  "type": "object",
-  "schemaVersion": 1,
-  "properties": {
-    "location": {
-      "title": "Location",
-      "type": "string",
-      "description": "Free-text place name to geocode (e.g. \"Yosemite Valley, California\"). Ignored if `coordinates` is set.",
-      "editor": "textfield",
-      "default": "Yosemite Valley, California"
+    "$schema": "https://apify.com/schemas/v1/input.ide.json",
+    "title": "Golden Hour Scout",
+    "type": "object",
+    "schemaVersion": 1,
+    "properties": {
+        "location": {
+            "title": "Location",
+            "type": "string",
+            "description": "Free-text place name to geocode (e.g. \"Yosemite Valley, California\"). Ignored if `coordinates` is set.",
+            "editor": "textfield",
+            "prefill": "Yosemite Valley, California"
+        },
+        "coordinates": {
+            "sectionCaption": "Exact coordinates (alternative to Location)",
+            "sectionDescription": "For when you know precisely where you will be standing. Filling both fields in overrides Location and skips geocoding; leaving the section untouched geocodes the place name above.",
+            "title": "Coordinates",
+            "type": "object",
+            "description": "Latitude and longitude in decimal degrees. Set both fields or neither — a half-filled pair fails the run rather than guessing the other half.",
+            "editor": "schemaBased",
+            "properties": {
+                "latitude": {
+                    "title": "Latitude",
+                    "type": "number",
+                    "description": "Decimal degrees; positive north, negative south. Yosemite Valley is 37.7456. Convert other notations first: 37°44'44\"N is 37.7456.",
+                    "minimum": -90,
+                    "maximum": 90,
+                    "unit": "°",
+                    "editor": "number"
+                },
+                "longitude": {
+                    "title": "Longitude",
+                    "type": "number",
+                    "description": "Decimal degrees; positive east, negative west. Yosemite Valley is -119.5936. Convert other notations first: 119°35'37\"W is -119.5936.",
+                    "minimum": -180,
+                    "maximum": 180,
+                    "unit": "°",
+                    "editor": "number"
+                }
+            },
+            "additionalProperties": false
+        }
     },
-    "coordinates": {
-      "title": "Coordinates (optional)",
-      "type": "string",
-      "description": "Coordinates that override `location` and skip geocoding when set. Accepts decimal (\"37.7456, -119.5936\"), decimal with hemisphere (\"37.7456 N, 119.5936 W\"), degrees decimal minutes (\"N 37° 44.736, W 119° 35.616\"), or degrees minutes seconds (\"37°44'44\\\"N 119°35'37\\\"W\"). Hemisphere letters may come before or after the number and may be given on just one of the two components (\"37.7456 N, -119.5936\" — the bare number takes the remaining axis and keeps its own sign); separate the two with a comma or whitespace. A colon may stand in for the degree sign.",
-      "editor": "textfield"
-    }
-  },
-  "required": []
+    "required": []
 }

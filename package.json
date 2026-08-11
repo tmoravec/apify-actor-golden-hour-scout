@@ -1,25 +1,42 @@
 {
-  "name": "golden-hour-scout",
-  "version": "0.1.0",
-  "description": "Apify Actor that returns golden/blue-hour photography windows for a location over the next 7 days, labeled with the forecast's own WMO condition codes.",
-  "type": "module",
-  "private": true,
-  "scripts": {
-    "build": "tsc -p tsconfig.build.json",
-    "start": "node dist/main.js",
-    "start:dev": "tsx src/main.ts",
-    "test": "vitest run",
-    "typecheck": "tsc --noEmit"
-  },
-  "license": "Apache-2.0",
-  "dependencies": {
-    "apify": "^3.7.2",
-    "suncalc": "2.0.1"
-  },
-  "devDependencies": {
-    "@types/node": "26.1.2",
-    "tsx": "4.23.1",
-    "typescript": "7.0.2",
-    "vitest": "4.1.10"
-  }
+    "name": "golden-hour-scout",
+    "version": "0.1.0",
+    "description": "Apify Actor that returns golden/blue-hour photography windows for a location over the next 7 days, labeled with the forecast's own WMO condition codes.",
+    "type": "module",
+    "private": true,
+    "engines": {
+        "node": ">=24.0.0"
+    },
+    "scripts": {
+        "start": "npm run start:dev",
+        "start:prod": "node dist/main.js",
+        "start:dev": "tsx src/main.ts",
+        "build": "tsc",
+        "lint": "eslint",
+        "lint:fix": "eslint --fix",
+        "format": "prettier --write .",
+        "format:check": "prettier --check .",
+        "test": "vitest run",
+        "typecheck": "tsc -p tsconfig.test.json --noEmit"
+    },
+    "license": "Apache-2.0",
+    "dependencies": {
+        "@crawlee/utils": "^3.17.0",
+        "apify": "^3.7.2",
+        "got-scraping": "^4.2.1",
+        "suncalc": "2.0.1"
+    },
+    "devDependencies": {
+        "@apify/eslint-config": "^2.0.6",
+        "@apify/tsconfig": "^0.2.0",
+        "@types/node": "26.1.2",
+        "eslint": "^9.39.5",
+        "eslint-config-prettier": "^10.1.8",
+        "globals": "^17.9.0",
+        "prettier": "^3.9.6",
+        "tsx": "4.23.1",
+        "typescript": "^6.0.3",
+        "typescript-eslint": "^8.66.0",
+        "vitest": "4.1.10"
+    }
 }

@@ -1,9 +1,19 @@
 {
-  "actorSpecification": 1,
-  "name": "golden-hour-scout",
-  "title": "Golden Hour Scout",
-  "version": "0.1",
-  "description": "Find golden hour and blue hour photography windows for any location, for the next 7 days, labeled with the forecast's own WMO sky condition codes.",
-  "memory": 512,
-  "output": "./output_schema.json"
+    "$schema": "https://apify.com/schemas/v1/actor.ide.json",
+    "actorSpecification": 1,
+    "name": "golden-hour-scout",
+    "title": "Golden Hour Scout",
+    "version": "0.1",
+    "description": "Find golden hour and blue hour photography windows for any location, for the next 7 days, labeled with the forecast's own WMO sky condition codes.",
+    "memory": 512,
+    "buildTag": "latest",
+    "meta": {
+        "generatedBy": "Claude Code"
+    },
+    "inputSchema": "./input_schema.json",
+    "outputSchema": "./output_schema.json",
+    "storages": {
+        "dataset": "./dataset_schema.json"
+    },
+    "dockerfile": "../Dockerfile"
 }

@@ -1,16 +1,18 @@
 {
-  "compilerOptions": {
-    "target": "ES2022",
-    "lib": ["ES2022"],
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
-    "strict": true,
-    "esModuleInterop": true,
-    "forceConsistentCasingInFileNames": true,
-    "skipLibCheck": true,
-    "resolveJsonModule": true,
-    "isolatedModules": true,
-    "noEmit": true
-  },
-  "include": ["src/**/*", "tests/**/*", "vitest.config.ts"]
+    "extends": "@apify/tsconfig",
+    "compilerOptions": {
+        "module": "NodeNext",
+        "moduleResolution": "NodeNext",
+        "target": "ES2022",
+        "outDir": "dist",
+        "rootDir": "./src",
+        "incremental": false,
+        "skipLibCheck": true,
+        "lib": ["ES2023"],
+        "noUnusedLocals": false,
+        "importHelpers": false,
+        "declaration": false,
+        "declarationMap": false
+    },
+    "include": ["./src/**/*"]
 }
