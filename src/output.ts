@@ -4,7 +4,6 @@
  *
  * No `OUTPUT` record, deliberately -- see AGENTS.md.
  */
-import { formatStatusMessage, truncateWithEllipsis } from './errors.js';
 import type { DatasetItem, GeoLocation, WindowItem } from './types.js';
 import { isWindowItem } from './types.js';
 
@@ -47,16 +46,17 @@ export function buildNextIdealSky(
     return { nextIdealSky: null, nextIdealSkyReason: reason };
 }
 
-// The name leads the message and a geocoded composite (`name, admin1, country`)
-// has no bound of its own, so it is capped before composing: the overall cap
-// truncates from the end and would otherwise evict the summary behind it.
-const MAX_LOCATION_NAME = 120;
-
 /**
  * The run's terminal, user-visible status message, per
  * `actor-whitepaper/README.md:1143`'s "the end user should never need to look
  * into the log". Location, window count, then either the next ideal-sky window
  * or the reason there is none -- never a dangling "Next ideal sky:".
+ *
+ * Composed raw: every part is bounded and single-line by construction. The
+ * counts, the type enum and the ISO date are bounded by their own shapes, the
+ * two reason strings are literals above, and the one part with no bound of its
+ * own -- a geocoded composite name -- is capped where it is composed, in
+ * `geocode.ts`.
  *
  * The only place the Actor reports anything relative to `now`.
  */
@@ -67,9 +67,9 @@ export function buildStatusMessage(items: DatasetItem[], location: GeoLocation, 
         ? `Next ideal sky: ${nextIdealSky.type} on ${nextIdealSky.date}.`
         : (nextIdealSkyReason ?? '');
 
-    return formatStatusMessage(
-        `${truncateWithEllipsis(location.name, MAX_LOCATION_NAME)}: ` +
-            `${windowCount} photography window${windowCount === 1 ? '' : 's'} ` +
-            `over the next 7 days. ${nextIdealSkyPart}`,
+    return (
+        `${location.name}: ` +
+        `${windowCount} photography window${windowCount === 1 ? '' : 's'} ` +
+        `over the next 7 days. ${nextIdealSkyPart}`
     );
 }

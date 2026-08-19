@@ -1,9 +1,12 @@
 /**
- * The Actor's error surface: the `InputError` class, got's `beforeError` hook,
- * the pure exit-code decision, and the process-level failure listener that acts
- * on it. One file deliberately -- none of the four earns a module of its own.
+ * The Actor's error surface: the `InputError` class that drives the exit code,
+ * the two message helpers its callers share, and got's `beforeError` hook. One
+ * file deliberately -- none of the four earns a module of its own.
+ *
+ * Failing the run is not here: each boundary function called from `main.ts`
+ * catches and calls `Actor.fail` itself, so there is no shared failure helper to
+ * hold. See AGENTS.md.
  */
-import { Actor, log } from 'apify';
 import type { RequestError } from 'got-scraping';
 
 /** Thrown when the run cannot proceed because of something the user gave it. Drives exit code 2. */
@@ -22,22 +25,13 @@ export function describeValue(value: unknown): string {
     return String(value);
 }
 
-// No API limit is documented for a status message, so this cap is ours.
-const MAX_STATUS_MESSAGE = 500;
-
 /**
- * Collapses newlines (a multi-line status message is unreadable in Console) and
- * caps the result. Shared with the success path's `buildStatusMessage`
- * (`output.ts`), which writes the same field under the same constraint.
- */
-export function formatStatusMessage(message: string): string {
-    return truncateWithEllipsis(message.replace(/\s*\n+\s*/g, ' ').trim(), MAX_STATUS_MESSAGE);
-}
-
-/**
- * Caps `text` at `limit` UTF-16 code units, the ellipsis included. Exported for
- * `buildStatusMessage`, which caps the location name separately before
- * composing so the overall cap can't evict the summary behind it.
+ * Caps `text` at `limit` UTF-16 code units, the ellipsis included.
+ *
+ * Nothing caps a status message as a whole any more. Instead the two strings
+ * that reach one with no bound of their own are capped where they are produced,
+ * and both call this: geocoding's composite display name (`geocode.ts`) and the
+ * response body the hook below folds into a failure message.
  *
  * Why do we even need this? Because both `.length` and `.slice` count UTF-16
  * code units rather than characters. So an arbitrary limit can land inside
@@ -51,37 +45,11 @@ export function truncateWithEllipsis(text: string, limit: number): string {
     return `${whole}…`;
 }
 
-// What `String()` yields for a thrown non-Error, none of it usable as the run's
-// terminal status message.
-const UNINFORMATIVE_STRINGIFICATIONS = new Set(['', 'undefined', 'null', '[object Object]']);
-
-/**
- * Coerces a thrown value into an `Error` whose message says something: a
- * rejected `undefined` would otherwise reach the user as the status message
- * `undefined`, and a thrown object as `[object Object]` -- FAILED runs
- * explaining nothing, which is what the status-message convention exists to
- * prevent. Objects get one JSON attempt so their fields survive. Both coercions
- * are guarded, since a hostile `toString` or a circular reference must not throw
- * on the failure path itself.
- */
-function toError(reason: unknown): Error {
-    if (reason instanceof Error) return reason;
-    const stringified = coerce(() => String(reason));
-    if (stringified && !UNINFORMATIVE_STRINGIFICATIONS.has(stringified)) return new Error(stringified);
-    const json = coerce(() => JSON.stringify(reason));
-    if (json && !UNINFORMATIVE_STRINGIFICATIONS.has(json) && json !== '{}') {
-        return new Error(`The run failed with a thrown non-Error value: ${json}`);
-    }
-    return new Error('The run failed with a thrown value carrying no message -- see the run log for details.');
-}
-
-function coerce(stringify: () => string | undefined): string | undefined {
-    try {
-        return stringify();
-    } catch {
-        return undefined;
-    }
-}
+// A response body is the one unbounded, possibly multi-line part of a failure
+// message: Open-Meteo's own rejection is a short JSON line, but a 502/503 from a
+// CDN or proxy in front of it is a multi-KB HTML page. Since the message becomes
+// the run's status message verbatim, the cap is applied here, at the origin.
+const MAX_FOLDED_BODY = 500;
 
 /**
  * got's message stops at the status line, and @apify/log renders an error's
@@ -89,53 +57,25 @@ function coerce(stringify: () => string | undefined): string | undefined {
  * Open-Meteo's `{"error":true,"reason":"..."}` body would otherwise never reach
  * the operator. A got hook rather than a catch at the entry point: rendering a
  * transport error belongs to the transport.
+ *
+ * The body is folded in as a single capped line: newlines are unreadable in a
+ * Console status message, and an unbounded body would evict got's own status
+ * line from the operator's view of it.
  */
 export function foldResponseBodyIntoMessage(error: RequestError): RequestError {
     const rawBody = error.response?.rawBody;
     // `?.length`, not truthiness: `rawBody` is a `Buffer`, and an empty one is
     // truthy -- a bare `if (rawBody)` appends a dangling `": "` to every
     // empty-bodied 4xx.
+    if (!rawBody?.length) return error;
+
+    const body = truncateWithEllipsis(
+        String(rawBody)
+            .replace(/\s*\n+\s*/g, ' ')
+            .trim(),
+        MAX_FOLDED_BODY,
+    );
     // eslint-disable-next-line no-param-reassign -- mutate and return, per got's own beforeError contract
-    if (rawBody?.length) error.message = `${error.message}: ${rawBody}`;
+    error.message = `${error.message}: ${body}`;
     return error;
-}
-
-/**
- * The whole failure decision, pure so it needs no mocks to test. `InputError`
- * means the user gave us something unusable -- exit 2; everything else means the
- * world misbehaved -- exit 1.
- */
-export function exitOptionsFor(reason: unknown): { statusMessage: string; exitCode: number } {
-    const error = toError(reason);
-    const exitCode = error instanceof InputError ? 2 : 1;
-    return { statusMessage: formatStatusMessage(error.message), exitCode };
-}
-
-/**
- * The impure part. `main.ts` registers this directly on both process error
- * events -- a listener, not a wrapper, which is what lets the flow stay flat
- * statements with no block around them.
- */
-export async function failRun(reason: unknown): Promise<void> {
-    // Both exits below need this, and deriving it inside the `try` keeps
-    // `exitOptionsFor` covered by the catch.
-    let exitCode = 1;
-    try {
-        const error = toError(reason);
-        const options = exitOptionsFor(error);
-        exitCode = options.exitCode;
-        log.exception(error, error.message); // the full stack, as Actor.main used to
-        await Actor.exit(options);
-    } catch {
-        // A throw inside an `uncaughtException` handler is itself fatal and would
-        // lose the failure entirely, so nothing above may go unguarded --
-        // including a rejecting `events.close()` inside `Actor.exit`, which
-        // leaves the SDK flagged as exiting without reaching its own exit.
-        process.exit(exitCode);
-    }
-    // Not unreachable: `Actor.exit`'s `isExiting` guard returns normally when an
-    // exit is already in flight (the SDK's own abort handler, for one). Without
-    // this the process stays alive on the SDK's open handles and the platform
-    // reports a timeout instead of a failure.
-    process.exit(exitCode);
 }

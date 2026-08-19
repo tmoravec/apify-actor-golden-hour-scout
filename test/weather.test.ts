@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { gotScraping } from '@crawlee/utils';
+import { Actor, log } from 'apify';
 import type { Mock } from 'vitest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -10,7 +11,19 @@ import { fetchHourlyWeather } from '../src/weather.js';
 
 vi.mock('@crawlee/utils', () => ({ gotScraping: vi.fn() }));
 
+/**
+ * `fetchHourlyWeather` fails the run itself, so the SDK is stubbed to pin the
+ * status message and exit code. The stub resolves -- the SDK's `isExiting` case
+ * -- so the rethrow runs and the `rejects.toThrow` assertions below still hold.
+ */
+vi.mock('apify', () => ({
+    Actor: { fail: vi.fn() },
+    log: { exception: vi.fn() },
+}));
+
 const gotScrapingMock = gotScraping as unknown as Mock;
+const mockedFail = vi.mocked(Actor.fail);
+const mockedLogException = vi.mocked(log.exception);
 
 function loadFixture(name: string): unknown {
     return JSON.parse(fs.readFileSync(path.join(import.meta.dirname, 'fixtures', name), 'utf-8'));
@@ -29,6 +42,8 @@ function requestedUrl(callIndex = 0): URL {
 describe('fetchHourlyWeather', () => {
     beforeEach(() => {
         gotScrapingMock.mockReset();
+        mockedFail.mockReset();
+        mockedLogException.mockReset();
     });
 
     it('requests exactly the 6 hourly variables + timezone=auto&timeformat=unixtime&forecast_days=7, and no other horizon params', async () => {
@@ -110,6 +125,9 @@ describe('fetchHourlyWeather', () => {
         expect(samples[0].cloudMid).toBe(0);
         expect(samples[0].cloudHigh).toBe(0);
         expect(samples[0].precipProb).toBe(0);
+        // A catch block that swallowed and failed on a well-formed response would
+        // still return these samples; this is what catches it.
+        expect(mockedFail).not.toHaveBeenCalled();
     });
 
     it("surfaces the response's own resolved IANA timezone alongside the samples (the coordinates path's only zone source)", async () => {
@@ -154,6 +172,32 @@ describe('fetchHourlyWeather', () => {
         // act on it.
         await expect(fetchHourlyWeather({ latitude: 37.7456, longitude: -119.5936 })).rejects.toThrow(/weather_code/);
         await expect(fetchHourlyWeather({ latitude: 37.7456, longitude: -119.5936 })).rejects.toThrow(/cloud-cover/);
+
+        // Exit 1 throughout this module: nothing reachable here is the user's
+        // input to fix, so there is no branch to get wrong.
+        expect(mockedFail).toHaveBeenCalledWith(expect.stringMatching(/weather_code/), { exitCode: 1 });
+    });
+
+    it("logs the failure with its stack, so the log carries what the status message can't", async () => {
+        gotScrapingMock.mockResolvedValue(jsonResponse({}));
+
+        await expect(fetchHourlyWeather({ latitude: 37.7456, longitude: -119.5936 })).rejects.toThrow(/hourly/);
+
+        const [logged, message] = mockedLogException.mock.calls[0] as [Error, string];
+        expect(logged).toBeInstanceOf(Error);
+        expect(message).toBe(logged.message);
+    });
+
+    // The likeliest real failure, and the one the `beforeError` hook enriches --
+    // it has to survive the catch as the status message, not just the log.
+    it("fails the run with a rejected request's own message, not a rewritten one", async () => {
+        gotScrapingMock.mockRejectedValue(
+            new Error('Response code 400 (Bad Request): {"error":true,"reason":"Latitude must be in range."}'),
+        );
+
+        await expect(fetchHourlyWeather({ latitude: 999, longitude: -119.5936 })).rejects.toThrow(/Response code 400/);
+
+        expect(mockedFail).toHaveBeenCalledWith(expect.stringMatching(/Latitude must be in range/), { exitCode: 1 });
     });
 
     it.each([
@@ -166,6 +210,7 @@ describe('fetchHourlyWeather', () => {
         gotScrapingMock.mockResolvedValue(jsonResponse(body));
 
         await expect(fetchHourlyWeather({ latitude: 37.7456, longitude: -119.5936 })).rejects.toThrow(/hourly/);
+        expect(mockedFail).toHaveBeenCalledWith(expect.stringMatching(/hourly/), { exitCode: 1 });
     });
 
     it('a gap in the hourly array (non-contiguous, even at 168 total samples) throws an actionable error', async () => {
@@ -175,6 +220,7 @@ describe('fetchHourlyWeather', () => {
         await expect(fetchHourlyWeather({ latitude: 37.7456, longitude: -119.5936 })).rejects.toThrow(
             /gap|contiguous|3600/i,
         );
+        expect(mockedFail).toHaveBeenCalledWith(expect.stringMatching(/gap|contiguous|3600/i), { exitCode: 1 });
     });
 
     it('a wrong total sample count (!= 168) throws an actionable error naming the actual count', async () => {
@@ -183,5 +229,6 @@ describe('fetchHourlyWeather', () => {
 
         await expect(fetchHourlyWeather({ latitude: 37.7456, longitude: -119.5936 })).rejects.toThrow(/168/);
         await expect(fetchHourlyWeather({ latitude: 37.7456, longitude: -119.5936 })).rejects.toThrow(/100/);
+        expect(mockedFail).toHaveBeenCalledWith(expect.stringMatching(/168/), { exitCode: 1 });
     });
 });

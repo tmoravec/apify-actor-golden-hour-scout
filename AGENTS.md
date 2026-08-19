@@ -40,10 +40,10 @@ otherwise-ignored `storage/`. Scratch input, not a fixture; no test reads it.
 **`src/main.ts` is wiring only.** Flat top-level statements: no `function`,
 `=>`, `class`, `try`, and no branches or string building either — the file
 carries no unit tests, so anything with logic lives in a module that does. It is
-imports, the two `process.on` listeners, `Actor.init()`, the calls, and
-`Actor.exit(<status message>)`. `test/source-invariants.test.ts` enforces the
-keywords; ternaries and template literals are beyond a text check and stay
-prose-enforced here.
+imports, `Actor.init()`, the calls, and `Actor.exit(<status message>)` — no error
+boundary of any kind. `test/source-invariants.test.ts` enforces the keywords;
+ternaries and template literals are beyond a text check and stay prose-enforced
+here.
 
 **Wall clock.** Exactly one `new Date()` exists in the codebase — a top-level
 statement in `main.ts`, threaded explicitly from there. Never call `new Date()`
@@ -133,35 +133,96 @@ section.
 
 ### Failure path and status messages
 
-- **The failure path is two `process.on` lines in `main.ts`, not a wrapper.**
-  `failRun` (`src/errors.ts`) is registered on both `uncaughtException` and
-  `unhandledRejection`: node routes an entry-module top-level-await rejection to
-  the former. Do not reintroduce a try/catch around the flow.
-- **`failRun` ends in an unconditional `process.exit`, after the awaited
-  `Actor.exit`.** That line looks unreachable and is not: `Actor.exit`'s
-  `isExiting` re-entrancy guard makes it **return normally** when an exit is
-  already in flight, which would otherwise leave the process alive on the SDK's
-  open handles and get the run billed as TIMED-OUT instead of FAILED. The
-  `catch` exits with the same mapped code (a throw inside an `uncaughtException`
-  handler is itself fatal). Pinned in `test/errors.test.ts`.
+- **Each boundary function fails the run itself; there is no shared failure
+  helper and no boundary in `main.ts`.** The three functions `main.ts` calls that
+  can fail — `resolveTarget`, `resolveLocation` (`src/target.ts`) and
+  `fetchHourlyWeather` (`src/weather.ts`) — each wrap their whole body in the
+  same shape:
+
+    ```ts
+    } catch (reason) {
+        if (!(reason instanceof Error)) throw reason;
+        log.exception(reason, reason.message);
+        await Actor.fail(reason.message, { exitCode: 1 });
+        throw reason;
+    }
+    ```
+
+    Do not extract that into a helper — a helper is the old `failRun` renamed, and
+    the same stance applies as to the deliberately duplicated got options. What is
+    duplicated is the _shape_, not the exit code: **`resolveTarget` alone**
+    replaces the literal with `reason instanceof InputError ? 2 : 1`, because it is
+    the only site where both outcomes are reachable (its own validation and
+    geocoding's zero-results case are `InputError`s; a transport or HTTP failure
+    out of `geocode` is not). A ternary at the other two sites would ship
+    untested. Each site's exit code is pinned by tests asserting `Actor.fail`'s
+    arguments.
+
+    The three are the codebase's only impure-by-design functions. `buildWindows`,
+    `renderReport` and `buildStatusMessage` stay pure — do not wrap them; a throw
+    there is a bug, not a run outcome.
+
+- **`throw reason` after `await Actor.fail` is not dead code.** In production
+  `fail` → `exit` → `process.exit`, so it never runs. But `Actor.exit`'s
+  `isExiting` re-entrancy guard makes `fail` **return normally** when an exit is
+  already in flight (the SDK's own abort handler, for one); without the rethrow
+  the function resolves `undefined` and `main.ts` continues on garbage. In that
+  race the process ends on node's code 1 rather than the mapped code — accepted.
+- **Accepted gap: a rejecting `Actor.fail` also drops the mapped exit code.**
+  `exit` sets `isExiting = true` before `await events.close()`, and its own
+  `process.exit(exitCode)` — both the 30 s timer and the `.catch` on the
+  listener-drain promise — is registered only _after_ that await. So a rejecting
+  final `PERSIST_STATE` listener (or a throwing sync `exit` listener) propagates
+  out of `Actor.fail`, past the `throw reason` above, to `main.ts`'s top-level
+  await: node prints the stack and exits 1, collapsing an `InputError`'s 2.
+  Everything from the timer down is covered twice and is not exposed —
+  `waitForAllListenersToComplete`, `client.teardown` and `setStatusMessage` may
+  all reject safely. Accepted rather than guarded: the run is FAILED either way,
+  the status message is unset on this path regardless (`exit` sets it after the
+  throw point), and `log.exception` has already logged the real cause before the
+  `fail` call. A `.catch(() => process.exit(exitCode))` at each of the three
+  sites would buy back one integer in that race; a shared guard is `failRun`
+  renamed, which the bullet above rules out.
+- **Accepted gap: failures outside those three functions carry no status
+  message.** A rejection from `Actor.init`, `Actor.pushData`, `Actor.setValue`,
+  or a bug in the pure pipeline reaches node's default top-level-await handling:
+  stack to stderr, exit 1, run FAILED with the platform's generic message. No
+  TIMED-OUT hang, and exit 1 is the right code for all of them. Two caveats:
+    - `pushData`/`setValue` are the likeliest of these to fire, and are left
+      unwrapped on purpose — they hit Apify's own retried API, and a custom
+      message would restate what a generic FAILED already conveys. If that
+      judgment proves wrong, the fix is a tested `publishOutputs(items, location)`
+      in `src/output.ts` wrapping both calls with the same catch, not a listener.
+    - This path prints a raw stack via node, bypassing `apify/log`'s credential
+      censoring. A documented exception to the "always use `apify/log`" guidance
+      below, low-risk because nothing on this path handles a token.
 - **No `aborting` handler is registered, deliberately.** The SDK installs one at
   `init()` unless `gracefulShutdown: false`, so Apify's graceful-abort guidance
-  is already satisfied; ours would only add an arrow function to `main.ts`.
-- **Every terminal state carries a status message** — per the whitepaper, the
-  end user should never need the log to understand what happened.
-  `exitOptionsFor` (`src/errors.ts`) maps failures: `InputError` (and
-  `CoordinateInputError`) means unusable user input and exits **2**; everything
-  else means the world misbehaved and exits **1**; success exits **0**. Messages
-  collapse newlines (unreadable in Console) and are capped by us (the platform
-  documents no limit). `buildStatusMessage` caps the location name _separately
-  before_ composing, because a geocoded composite name has no bound of its own
-  and would otherwise evict the window count and ideal-sky line. `toError`
-  coerces thrown non-`Error`s so a FAILED run never reads `undefined` or
-  `[object Object]`.
-- **The `Actor.fail({ exitCode: 2 })` trap:** `fail` calls
-  `exit(messageOrOptions, { exitCode: 1, ...options })` and `exit` merges
-  `{ ...messageOrOptions, ...options }`, so `exitCode: 1` always wins. Use
-  `Actor.exit({ statusMessage, exitCode })` directly, as `failRun` does.
+  is already satisfied; ours would add an arrow function to `main.ts`, which the
+  wiring-only invariant forbids anyway.
+- **Every terminal state a boundary function reaches carries a status message** —
+  per the whitepaper, the end user should never need the log to understand what
+  happened. `InputError` (and `CoordinateInputError`) means unusable user input
+  and exits **2**; everything else means the world misbehaved and exits **1**;
+  success exits **0**.
+- **Status messages are composed raw — nothing caps or reformats them centrally.
+  Boundedness is by construction, at each origin.** Our own throws are short,
+  single-line literals. The two strings that arrive unbounded are capped where
+  they are produced, both via `truncateWithEllipsis` (`src/errors.ts`):
+  geocoding's composite `name, admin1, country` at composition (`geocode.ts`,
+  120), and a failed response's body in `foldResponseBodyIntoMessage`, which also
+  collapses its newlines (500) — Open-Meteo's rejection is a short JSON line, but
+  a 502 from a proxy in front of it is a multi-KB HTML page. If a new unbounded
+  source ever appears, cap it at its origin; do not reintroduce a global
+  formatter. Capping the geocoded name at composition means it is the same
+  bounded string in the status message, every dataset item and the report header.
+- **The `Actor.fail({ statusMessage, exitCode: 2 })` trap:** with a single object
+  argument, `fail` calls `exit(messageOrOptions, { exitCode: 1, ...options })`
+  and `exit` merges `{ ...messageOrOptions, ...options }`, so `exitCode: 1`
+  always wins. **The two-argument string form is not affected** — with a string
+  first, `exit` builds `{ ...options, statusMessage }` and the caller's
+  `exitCode` survives. Use `Actor.fail(message, { exitCode })`, as all three
+  boundary functions do.
 
 ### Output surfaces
 
@@ -289,11 +350,19 @@ hand-building a malformed response inline.
   offline: the pure composition (`buildWindows` → `renderReport` →
   `buildStatusMessage`) produces a 7-day, 28-item dataset with no mocks, and the
   status message names a window actually in it.
-- **`failRun` is the one exception to "rarely mocked"** — `test/errors.test.ts`
-  stubs `apify` to pin its behaviour when `Actor.exit` _returns_ (the `isExiting`
-  guard) and when it throws; neither is reachable from a smoke run.
-  `openMeteoHttpError()` there builds a **real** `HTTPError` and assigns
-  `response` afterwards, since got only populates it from a genuine `Request`.
+- **The boundary functions are the exception to "rarely mocked"** —
+  `test/target.test.ts` and `test/weather.test.ts` stub `apify` as
+  `{ Actor: { fail }, log: { exception } }` to pin which status message and exit
+  code each failure hands `Actor.fail`, since the mapping is inline at each site
+  rather than in one tested function. The stub resolves, which is also the SDK's
+  `isExiting` case, so the rethrow runs and every `rejects.toThrow` assertion
+  still holds. Assert with `toHaveBeenCalledWith`, never
+  `toHaveBeenCalledTimes` — several `it.each` rows call the function twice. Each
+  suite's happy path asserts `Actor.fail` was **not** called, which is what
+  catches a catch block that swallows and fails on a non-error.
+  `openMeteoHttpError()` in `test/errors.test.ts` builds a **real** `HTTPError`
+  and assigns `response` afterwards, since got only populates it from a genuine
+  `Request`.
 - **The `.actor/*.json` schemas are checked against the code**, not by
   validating emitted items (no JSON Schema validator is a dependency, by
   choice): `fields` must match `DATASET_ITEM_KEYS` both directions, the enums

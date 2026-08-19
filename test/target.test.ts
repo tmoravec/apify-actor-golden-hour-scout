@@ -1,3 +1,4 @@
+import { Actor, log } from 'apify';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { CoordinateInputError } from '../src/coordinates.js';
@@ -10,7 +11,21 @@ vi.mock('../src/geocode.js', () => ({
     geocode: vi.fn(),
 }));
 
+/**
+ * These two functions fail the run themselves rather than letting a caller do
+ * it, so the SDK is stubbed to pin *which* status message and exit code each
+ * failure hands `Actor.fail`. The stub resolves, which is also the SDK's
+ * `isExiting` case -- so the rethrow after it runs, and every `rejects.toThrow`
+ * assertion below still holds.
+ */
+vi.mock('apify', () => ({
+    Actor: { fail: vi.fn() },
+    log: { exception: vi.fn() },
+}));
+
 const mockedGeocode = vi.mocked(geocode);
+const mockedFail = vi.mocked(Actor.fail);
+const mockedLogException = vi.mocked(log.exception);
 
 const YOSEMITE_LOCATION: GeoLocation = {
     name: 'Yosemite Valley, California, United States',
@@ -24,6 +39,8 @@ const YOSEMITE_LOCATION: GeoLocation = {
 beforeEach(() => {
     mockedGeocode.mockReset();
     mockedGeocode.mockResolvedValue(YOSEMITE_LOCATION);
+    mockedFail.mockReset();
+    mockedLogException.mockReset();
 });
 
 describe('target.ts resolveTarget()', () => {
@@ -33,6 +50,9 @@ describe('target.ts resolveTarget()', () => {
         expect(mockedGeocode).toHaveBeenCalledTimes(1);
         expect(mockedGeocode).toHaveBeenCalledWith('Yosemite Valley, California');
         expect(target).toEqual(YOSEMITE_LOCATION);
+        // A catch block that swallowed and then failed on a non-error would still
+        // return the right target; this is what catches it.
+        expect(mockedFail).not.toHaveBeenCalled();
     });
 
     it('lets `coordinates` win over a `location` set at the same time, skipping geocoding entirely', async () => {
@@ -69,6 +89,9 @@ describe('target.ts resolveTarget()', () => {
         await expect(resolveTarget(input as never)).rejects.toThrow(InputError);
         await expect(resolveTarget(input as never)).rejects.toThrow(/no location given/i);
         expect(mockedGeocode).not.toHaveBeenCalled();
+        // Unusable user input -- exit 2, and the same text the throw carries, so
+        // the user reads it without opening the log.
+        expect(mockedFail).toHaveBeenCalledWith(expect.stringMatching(/no location given/i), { exitCode: 2 });
     });
 
     // Unchecked, these reach `.trim()` and fail on exit 1 with a raw `TypeError`:
@@ -83,6 +106,17 @@ describe('target.ts resolveTarget()', () => {
         await expect(resolveTarget(input)).rejects.toThrow(InputError);
         await expect(resolveTarget(input)).rejects.toThrow(/`location` must be a place name string/);
         expect(mockedGeocode).not.toHaveBeenCalled();
+        expect(mockedFail).toHaveBeenCalledWith(expect.stringMatching(/`location` must be a place name string/), {
+            exitCode: 2,
+        });
+    });
+
+    it("logs the failure with its stack, so the log carries what the status message can't", async () => {
+        await expect(resolveTarget({ location: '' })).rejects.toThrow(InputError);
+
+        const [logged, message] = mockedLogException.mock.calls[0] as [Error, string];
+        expect(logged).toBeInstanceOf(InputError);
+        expect(message).toBe(logged.message);
     });
 
     // Every row shares that prefix, so this pins that the rejected VALUE is named
@@ -100,8 +134,33 @@ describe('target.ts resolveTarget()', () => {
         async (_label, input) => {
             await expect(resolveTarget(input)).rejects.toThrow(CoordinateInputError);
             expect(mockedGeocode).not.toHaveBeenCalled();
+            // A CoordinateInputError is an InputError, so it takes the same exit
+            // code as the checks above rather than the world-misbehaved 1.
+            expect(mockedFail).toHaveBeenCalledWith(expect.any(String), { exitCode: 2 });
         },
     );
+
+    // `resolveTarget` is the only boundary function where both exit codes are
+    // reachable, which is why it is the only one carrying the branch. Both sides
+    // arrive the same way -- as a rejection out of `geocode` -- so neither is a
+    // hypothetical.
+    it("a geocode InputError (zero results) is the user's to fix: exit 2", async () => {
+        mockedGeocode.mockRejectedValue(new InputError('No geocoding results found for "xyzzyqwerty".'));
+
+        await expect(resolveTarget({ location: 'xyzzyqwerty' })).rejects.toThrow(InputError);
+
+        expect(mockedFail).toHaveBeenCalledWith(expect.stringMatching(/No geocoding results found/), { exitCode: 2 });
+    });
+
+    it('a geocode transport/HTTP failure is the world misbehaving: exit 1', async () => {
+        mockedGeocode.mockRejectedValue(
+            new Error('Response code 400 (Bad Request): {"error":true,"reason":"Invalid request"}'),
+        );
+
+        await expect(resolveTarget({ location: 'Yosemite Valley' })).rejects.toThrow(/Response code 400/);
+
+        expect(mockedFail).toHaveBeenCalledWith(expect.stringMatching(/Response code 400/), { exitCode: 1 });
+    });
 });
 
 describe('target.ts resolveLocation()', () => {
@@ -113,25 +172,34 @@ describe('target.ts resolveLocation()', () => {
         timezone: null,
     };
 
-    it("a geocoded target's own timezone wins even when the forecast reports a different one", () => {
-        const location = resolveLocation(geocodedTarget, 'Etc/UTC');
+    it("a geocoded target's own timezone wins even when the forecast reports a different one", async () => {
+        const location = await resolveLocation(geocodedTarget, 'Etc/UTC');
+
+        expect(location.timezone).toBe('America/Los_Angeles');
+        expect(mockedFail).not.toHaveBeenCalled();
+    });
+
+    it("a coordinates target (timezone: null) falls back to the forecast's resolved zone", async () => {
+        const location = await resolveLocation(coordinatesTarget, 'America/Los_Angeles');
 
         expect(location.timezone).toBe('America/Los_Angeles');
     });
 
-    it("a coordinates target (timezone: null) falls back to the forecast's resolved zone", () => {
-        const location = resolveLocation(coordinatesTarget, 'America/Los_Angeles');
-
-        expect(location.timezone).toBe('America/Los_Angeles');
+    it('throws, naming the coordinates and timezone=auto, when neither source has a zone', async () => {
+        await expect(resolveLocation(coordinatesTarget, null)).rejects.toThrow(/37\.7456/);
+        await expect(resolveLocation(coordinatesTarget, null)).rejects.toThrow(/timezone=auto/);
     });
 
-    it('throws, naming the coordinates and timezone=auto, when neither source has a zone', () => {
-        expect(() => resolveLocation(coordinatesTarget, null)).toThrow(/37\.7456/);
-        expect(() => resolveLocation(coordinatesTarget, null)).toThrow(/timezone=auto/);
+    // No zone is the world misbehaving, not bad user input: the user gave a valid
+    // coordinate pair and Open-Meteo answered without the field it was asked for.
+    it('fails the run on exit 1 when neither source has a zone', async () => {
+        await expect(resolveLocation(coordinatesTarget, null)).rejects.toThrow(Error);
+
+        expect(mockedFail).toHaveBeenCalledWith(expect.stringMatching(/timezone=auto/), { exitCode: 1 });
     });
 
-    it('passes name/latitude/longitude/admin1/country through untouched', () => {
-        const location = resolveLocation(geocodedTarget, null);
+    it('passes name/latitude/longitude/admin1/country through untouched', async () => {
+        const location = await resolveLocation(geocodedTarget, null);
 
         expect(location.name).toBe(YOSEMITE_LOCATION.name);
         expect(location.admin1).toBe(YOSEMITE_LOCATION.admin1);

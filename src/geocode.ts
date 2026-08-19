@@ -3,15 +3,23 @@
  * display name.
  *
  * The API returns `name`, `admin1` and `country` separately; the `name` handed
- * back here is the composite `name[, admin1][, country]`, so a wrong match is
- * obvious wherever the location is echoed. The raw fields travel too.
+ * back here is the composite `name[, admin1][, country]`, capped, so a wrong match
+ * is obvious wherever the location is echoed. The raw fields travel too.
  */
 import { gotScraping } from '@crawlee/utils';
 
-import { foldResponseBodyIntoMessage, InputError } from './errors.js';
+import { foldResponseBodyIntoMessage, InputError, truncateWithEllipsis } from './errors.js';
 import type { TargetLocation } from './types.js';
 
 const GEOCODING_URL = 'https://geocoding-api.open-meteo.com/v1/search';
+
+// The composite is the Actor's only unbounded display string -- it leads the run's
+// status message and is echoed on every dataset item and the report header -- so
+// it is capped here, at the one place it is composed, rather than at each of
+// those surfaces. `admin1`/`country` travel uncapped on purpose: nothing
+// recomposes them, and capping the parts as well as the composite would bound the
+// same text twice.
+const MAX_DISPLAY_NAME = 120;
 
 interface GeocodeResult {
     name: string;
@@ -74,7 +82,10 @@ export async function geocode(placeName: string): Promise<TargetLocation> {
     }
 
     return {
-        name: [first.name, first.admin1, first.country].filter((part): part is string => Boolean(part)).join(', '),
+        name: truncateWithEllipsis(
+            [first.name, first.admin1, first.country].filter((part): part is string => Boolean(part)).join(', '),
+            MAX_DISPLAY_NAME,
+        ),
         admin1: first.admin1,
         country: first.country,
         latitude: first.latitude,

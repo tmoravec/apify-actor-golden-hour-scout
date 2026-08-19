@@ -137,6 +137,32 @@ describe('geocode', () => {
         expect(location.name.startsWith(',')).toBe(false);
     });
 
+    // The composite name is the one unbounded string the Actor carries into the
+    // status message, every dataset item and the report header, so it is capped
+    // here at composition rather than at each of those surfaces.
+    it('caps an over-long composite name at composition, so no downstream surface has to', async () => {
+        const fixture = loadFixture('geocode-long-name.json');
+        gotScrapingMock.mockResolvedValue(jsonResponse(fixture));
+
+        const location = await geocode('Llanfairpwllgwyngyll');
+
+        expect(location.name.length).toBe(120);
+        expect(location.name.endsWith('…')).toBe(true);
+        expect(location.name.startsWith('Llanfairpwllgwyngyllgogerychwyrndrobwllllantysiliogogogoch,')).toBe(true);
+    });
+
+    // The parts travel uncapped deliberately -- nothing recomposes them, and the
+    // cap belongs to the composite the Actor actually displays.
+    it('leaves the raw admin1/country parts uncapped', async () => {
+        const fixture = loadFixture('geocode-long-name.json');
+        gotScrapingMock.mockResolvedValue(jsonResponse(fixture));
+
+        const location = await geocode('Llanfairpwllgwyngyll');
+
+        expect(location.country).toBe('United Kingdom of Great Britain and Northern Ireland');
+        expect(location.admin1).toBe('Llanfairpwllgwyngyllgogerychwyrndrobwllllantysiliogogogoch Community');
+    });
+
     // Nothing enforces that the API returns a `timezone`, hence `TargetLocation`'s
     // `timezone: string | null` -- the same zone-not-settled state the `coordinates`
     // path produces. `null` rather than `undefined` is what `resolveLocation`'s `??`

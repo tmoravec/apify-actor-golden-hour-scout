@@ -91,8 +91,7 @@ describe('output.ts buildStatusMessage()', () => {
         const message = buildStatusMessage(items, LOCATION, now);
 
         expect(message).toContain(LOCATION.name);
-        // Two WindowItems; the PolarItem is not one. Pins the plural "windows" -- the
-        // singular is pinned in the long-name test below.
+        // Two WindowItems; the PolarItem is not one.
         expect(message).toContain('2 photography windows');
     });
 
@@ -114,17 +113,12 @@ describe('output.ts buildStatusMessage()', () => {
         expect(message.toLowerCase()).toContain('no ideal-sky');
     });
 
-    // A length assertion alone would be satisfied by a message that is all name,
-    // with the summary it exists to carry cut off the end.
-    it('keeps the window count and the ideal-sky part behind a very long location name', () => {
+    it('uses the singular "window" for a single window', () => {
         const now = new Date('2026-08-01T00:00:00-07:00');
-        const longLocation: GeoLocation = { ...LOCATION, name: 'X'.repeat(2000) };
         const item = windowItem({ endLocal: '2026-08-01T05:30:00-07:00' });
 
-        const message = buildStatusMessage([item], longLocation, now);
+        const message = buildStatusMessage([item], LOCATION, now);
 
-        expect(message.length).toBeLessThan(600);
-        expect(message).toContain('1 photography window');
-        expect(message).toContain(item.type);
+        expect(message).toContain('1 photography window ');
     });
 });
