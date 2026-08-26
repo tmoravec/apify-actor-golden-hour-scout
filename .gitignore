@@ -1,0 +1,36 @@
+# This file tells Git which files shouldn't be added to source control
+
+.DS_Store
+.idea
+.vscode
+.zed
+dist
+node_modules
+apify_storage
+
+# Local run storage is scratch -- except the default input, which is tracked so
+# `apify run` has a working location out of the box (see AGENTS.md). Negating a
+# single path needs the directories left traversable, which is what the middle
+# line does; a bare `storage` would make the negation unreachable.
+storage/**
+!storage/**/
+!storage/key_value_stores/default/INPUT.json
+
+# Added by Apify CLI
+.venv
+
+# Logs
+*.log
+
+# Env
+.env*
+
+# Coverage
+coverage/
+
+tags
+
+.claude
+
+plans
+reviews

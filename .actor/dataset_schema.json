@@ -1,0 +1,235 @@
+{
+    "$schema": "https://apify.com/schemas/v1/dataset.ide.json",
+    "actorSpecification": 1,
+    "title": "Golden Hour Scout dataset",
+    "description": "One item per photography window, plus one explanatory item for any local day that has no windows. All 7 local days always appear.",
+    "fields": {
+        "$schema": "http://json-schema.org/draft-07/schema",
+        "type": "object",
+        "required": ["date", "type", "location"],
+        "properties": {
+            "date": {
+                "type": "string",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+                "title": "Solar day",
+                "description": "Local date (YYYY-MM-DD) of the solar day that produced this item — NOT a restatement of startLocal's date. Above roughly 60° latitude an evening window can end after local midnight, so endLocal may carry the next date while this does not. Read boundary dates from startLocal/endLocal, never from here.",
+                "example": "2026-08-02"
+            },
+            "type": {
+                "type": "string",
+                "enum": [
+                    "blueHourMorning",
+                    "goldenHourMorning",
+                    "goldenHourEvening",
+                    "blueHourEvening",
+                    "polar",
+                    "noWindows"
+                ],
+                "title": "Item type",
+                "description": "One of the four photography windows, or one of the two explanatory shapes emitted for a local day with zero windows.",
+                "example": "goldenHourEvening"
+            },
+            "reason": {
+                "type": "string",
+                "enum": ["polar-day", "polar-night", "no-boundary-crossings"],
+                "title": "No-window reason",
+                "description": "Present only on polar and noWindows items. \"no-boundary-crossings\" is an ordinary day, with a real sunrise and sunset, on which the sun still never reaches the golden/blue-hour elevation boundaries — deliberately not labelled polar, which would be factually wrong.",
+                "example": "polar-day"
+            },
+            "startLocal": {
+                "type": "string",
+                "format": "date-time",
+                "title": "Start",
+                "description": "Window start as ISO-8601 local time with an explicit numeric UTC offset — never bare UTC, never the runner's own zone. Absent on polar and noWindows items.",
+                "example": "2026-08-02T20:31:00-07:00"
+            },
+            "endLocal": {
+                "type": "string",
+                "format": "date-time",
+                "title": "End",
+                "description": "Window end as ISO-8601 local time with an explicit numeric UTC offset. May carry the next calendar date at high latitudes. Absent on polar and noWindows items.",
+                "example": "2026-08-02T21:26:00-07:00"
+            },
+            "condition": {
+                "type": "string",
+                "title": "Condition",
+                "description": "WMO label of the hourly sample closest to the window's midpoint, ties going to the later hour, or \"n/a\" if that sample carried no weather code.",
+                "example": "Partly cloudy"
+            },
+            "wmoCode": {
+                "type": ["integer", "null"],
+                "title": "WMO code",
+                "description": "Raw WMO weather code backing `condition`, or null if the forecast reported none for that hour.",
+                "example": 2
+            },
+            "conditionSequence": {
+                "type": "array",
+                "items": { "type": "string" },
+                "title": "Condition sequence",
+                "description": "One condition label per hour overlapping [start, end), duplicates kept.",
+                "example": ["Partly cloudy", "Partly cloudy"]
+            },
+            "idealSky": {
+                "type": "boolean",
+                "title": "Ideal sky",
+                "description": "True only on evidence: a dry, unobscured WMO code AND all four cloud figures inside their bands simultaneously. A figure the forecast omitted counts as unknown rather than 0%, so an incomplete forecast yields no ideal-sky windows instead of a verdict on partial data.",
+                "example": true
+            },
+            "conditions": {
+                "type": "object",
+                "title": "Cloud & precipitation",
+                "description": "Figures from the hourly sample closest to the window's midpoint. Percent 0-100, or null where the forecast omitted that variable — which is not the same as 0.",
+                "properties": {
+                    "cloudTotal": {
+                        "type": ["number", "null"],
+                        "minimum": 0,
+                        "maximum": 100,
+                        "title": "Total cloud cover %",
+                        "description": "An independent whole-sky reading, not the sum or maximum of the three layer figures — layers overlap, so they routinely sum past 100%.",
+                        "example": 42
+                    },
+                    "cloudLow": {
+                        "type": ["number", "null"],
+                        "minimum": 0,
+                        "maximum": 100,
+                        "title": "Low cloud %",
+                        "description": "Whole-sky low-cloud cover. Open-Meteo reports no bearing, so this cannot say whether the cloud sits on the sun-side horizon specifically.",
+                        "example": 2
+                    },
+                    "cloudMid": {
+                        "type": ["number", "null"],
+                        "minimum": 0,
+                        "maximum": 100,
+                        "title": "Mid cloud %",
+                        "example": 11
+                    },
+                    "cloudHigh": {
+                        "type": ["number", "null"],
+                        "minimum": 0,
+                        "maximum": 100,
+                        "title": "High cloud %",
+                        "example": 38
+                    },
+                    "precipProb": {
+                        "type": ["number", "null"],
+                        "minimum": 0,
+                        "maximum": 100,
+                        "title": "Precipitation probability %",
+                        "example": 5
+                    }
+                }
+            },
+            "sun": {
+                "type": "object",
+                "title": "Sun",
+                "description": "Sunrise and sunset for the item's solar day, plus the sun's bearing mid-window. Absent on polar and noWindows items.",
+                "required": ["azimuthAtPeak"],
+                "properties": {
+                    "sunrise": {
+                        "type": ["string", "null"],
+                        "title": "Sunrise",
+                        "description": "ISO-8601 local time with UTC offset, or null on a polar day/night where the event does not occur.",
+                        "example": "2026-08-02T06:03:00-07:00"
+                    },
+                    "sunset": {
+                        "type": ["string", "null"],
+                        "title": "Sunset",
+                        "description": "ISO-8601 local time with UTC offset, or null on a polar day/night where the event does not occur.",
+                        "example": "2026-08-02T20:11:00-07:00"
+                    },
+                    "azimuthAtPeak": {
+                        "type": "number",
+                        "minimum": 0,
+                        "exclusiveMaximum": 360,
+                        "title": "Azimuth at midpoint",
+                        "description": "Compass azimuth in degrees, north-clockwise, at the window's temporal midpoint.",
+                        "example": 290
+                    }
+                }
+            },
+            "location": {
+                "type": "object",
+                "title": "Location",
+                "description": "The resolved place, repeated on every item. On the `coordinates` input path there is no place record, so `name` is the formatted lat/lon — a mistyped pair stays visible rather than being silently geocoded away.",
+                "required": ["name", "latitude", "longitude", "timezone"],
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "title": "Name",
+                        "description": "Composite display name: name[, admin1][, country], missing parts skipped.",
+                        "example": "Yosemite Valley, California, United States"
+                    },
+                    "admin1": {
+                        "type": "string",
+                        "title": "State / province",
+                        "description": "Raw admin1 field from the geocoding API, when it supplied one.",
+                        "example": "California"
+                    },
+                    "country": {
+                        "type": "string",
+                        "title": "Country",
+                        "description": "Raw country field from the geocoding API, when it supplied one.",
+                        "example": "United States"
+                    },
+                    "latitude": {
+                        "type": "number",
+                        "minimum": -90,
+                        "maximum": 90,
+                        "title": "Latitude",
+                        "example": 37.7456
+                    },
+                    "longitude": {
+                        "type": "number",
+                        "minimum": -180,
+                        "maximum": 180,
+                        "title": "Longitude",
+                        "example": -119.5936
+                    },
+                    "timezone": {
+                        "type": "string",
+                        "title": "IANA timezone",
+                        "description": "Resolved from geocoding, or from the forecast's timezone=auto read-back on the `coordinates` path. A missing zone fails the run; it is never defaulted to UTC or the runner's zone.",
+                        "example": "America/Los_Angeles"
+                    }
+                }
+            }
+        }
+    },
+    "views": {
+        "overview": {
+            "title": "Overview",
+            "transformation": {
+                "fields": ["date", "type", "startLocal", "endLocal", "condition", "idealSky"]
+            },
+            "display": {
+                "component": "table",
+                "properties": {
+                    "date": {
+                        "label": "Date",
+                        "format": "text"
+                    },
+                    "type": {
+                        "label": "Type",
+                        "format": "text"
+                    },
+                    "startLocal": {
+                        "label": "Start",
+                        "format": "text"
+                    },
+                    "endLocal": {
+                        "label": "End",
+                        "format": "text"
+                    },
+                    "condition": {
+                        "label": "Condition",
+                        "format": "text"
+                    },
+                    "idealSky": {
+                        "label": "Ideal sky",
+                        "format": "boolean"
+                    }
+                }
+            }
+        }
+    }
+}

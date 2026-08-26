@@ -1,0 +1,12 @@
+{
+    "$schema": "https://apify.com/schemas/v1/output.ide.json",
+    "actorOutputSchemaVersion": 1,
+    "title": "Golden Hour Scout output",
+    "properties": {
+        "report": {
+            "title": "Report",
+            "type": "string",
+            "template": "{{links.apiDefaultKeyValueStoreUrl}}/records/report.html"
+        }
+    }
+}

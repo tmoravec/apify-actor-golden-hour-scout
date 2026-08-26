@@ -1,0 +1,31 @@
+# configurations
+.idea
+.vscode
+.zed
+
+# crawlee and apify storage folders
+apify_storage
+crawlee_storage
+storage
+.venv
+
+# installed files (reinstalled inside the image)
+node_modules
+
+# rebuilt by the builder stage
+dist
+
+# dev-only files
+test
+docs
+plans
+reviews
+coverage
+tags
+.github
+AGENTS.md
+CLAUDE.md
+
+# git folder
+.git
+.gitignore
