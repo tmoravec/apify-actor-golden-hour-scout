@@ -29,3 +29,8 @@ storage/**
 coverage/
 
 tags
+
+.claude
+
+plans
+reviews
